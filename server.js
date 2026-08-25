@@ -25,6 +25,7 @@ const allowedOrigins = [
   'https://mahokofridaynews.com',
   'https://www.mahokofridaynews.com',
   'https://mahokofridaynews.onrender.com',
+  'https://mahokofridaynews.onrender.com',
   'http://localhost:3000',
   'http://localhost:5173'
 ];
