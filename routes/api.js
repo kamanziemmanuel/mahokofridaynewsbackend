@@ -230,6 +230,8 @@ router.put(
     }
   }
 );
+
+
 router.get('/authors/:id/stories', async (req, res) => {
 
   try {
@@ -464,6 +466,7 @@ error:err.message
 }
 
 });
+
 
 // ================= COMMENTS =================
 
@@ -883,6 +886,245 @@ error:err.message
 });
 
 
+// ======================================================
+// 1. UPDATE VIDEO
+// ======================================================
+
+router.put(
+  '/videos/:id',
+  auth,
+  requireRole('Admin', 'Editor'),
+  upload.single('thumbnail'),
+
+  async (req, res) => {
+    try {
+
+      const { id } = req.params;
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid video id'
+        });
+      }
+
+      const video = await Video.findById(id);
+
+      if (!video) {
+        return res.status(404).json({
+          success: false,
+          error: 'Video not found'
+        });
+      }
+
+      const {
+        title,
+        youtube_url,
+        category
+      } = req.body;
+
+      if (title !== undefined) {
+        video.title = title;
+      }
+
+      if (category !== undefined) {
+        video.category = category;
+      }
+
+      if (
+        youtube_url !== undefined &&
+        youtube_url.trim()
+      ) {
+
+        let embedUrl =
+          youtube_url.trim();
+
+        const match =
+          youtube_url.match(
+            /[?&]v=([^?&]+)/
+          ) ||
+          youtube_url.match(
+            /youtu\.be\/([^?&]+)/
+          );
+
+        if (match) {
+          embedUrl =
+            `https://www.youtube.com/embed/${match[1]}`;
+        }
+
+        video.youtube_url = embedUrl;
+      }
+
+      if (req.file) {
+
+        const result =
+          await uploadToCloudinary(
+            req.file.buffer,
+            'videos'
+          );
+
+        if (
+          !result ||
+          !result.secure_url
+        ) {
+          return res.status(500).json({
+            success: false,
+            error:
+              'Cloudinary did not return an image URL'
+          });
+        }
+
+        video.thumbnail =
+          result.secure_url;
+      }
+
+      await video.save();
+
+      try {
+
+        await AuditLog.create({
+          username:
+            req.user?.username ||
+            'Unknown',
+
+          action:
+            `Updated video: ${video.title}`,
+
+          ip_address:
+            req.ip ||
+            req.headers['x-forwarded-for'] ||
+            ''
+        });
+
+      } catch (auditError) {
+
+        console.error(
+          'Video update audit log error:',
+          auditError.message
+        );
+
+      }
+
+      res.status(200).json({
+        success: true,
+        message:
+          'Video updated successfully',
+
+        video: {
+          ...video.toObject(),
+          id: video._id
+        }
+      });
+
+    } catch (err) {
+
+      console.error(
+        'UPDATE VIDEO ERROR:',
+        err
+      );
+
+      res.status(500).json({
+        success: false,
+        error:
+          'Failed to update video',
+        details: err.message
+      });
+
+    }
+  }
+);
+
+
+// ======================================================
+// 2. DELETE VIDEO
+// ======================================================
+
+router.delete(
+  '/videos/:id',
+  auth,
+  requireRole('Admin'),
+
+  async (req, res) => {
+
+    try {
+
+      const { id } = req.params;
+
+      if (
+        !mongoose.Types.ObjectId.isValid(id)
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid video id'
+        });
+      }
+
+      const video =
+        await Video.findById(id);
+
+      if (!video) {
+        return res.status(404).json({
+          success: false,
+          error: 'Video not found'
+        });
+      }
+
+      const videoTitle =
+        video.title;
+
+      await Video.findByIdAndDelete(id);
+
+      try {
+
+        await AuditLog.create({
+          username:
+            req.user?.username ||
+            'Unknown',
+
+          action:
+            `Deleted video: ${videoTitle}`,
+
+          ip_address:
+            req.ip ||
+            req.headers['x-forwarded-for'] ||
+            ''
+        });
+
+      } catch (auditError) {
+
+        console.error(
+          'Video delete audit log error:',
+          auditError.message
+        );
+
+      }
+
+      res.json({
+        success: true,
+        message:
+          'Video deleted successfully'
+      });
+
+    } catch (err) {
+
+      console.error(
+        'DELETE VIDEO ERROR:',
+        err
+      );
+
+      res.status(500).json({
+        success: false,
+        error:
+          'Failed to delete video',
+        details: err.message
+      });
+
+    }
+
+  }
+);
+
+
 
 
 
@@ -1121,6 +1363,247 @@ error:err.message
 }
 
 });
+
+
+// ======================================================
+// 3. UPDATE AD
+// ======================================================
+
+router.put(
+  '/ads/:id',
+  auth,
+  requireRole('Admin'),
+  upload.single('file'),
+
+  async (req, res) => {
+
+    try {
+
+      const { id } = req.params;
+
+      if (
+        !mongoose.Types.ObjectId.isValid(id)
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid ad id'
+        });
+      }
+
+      const ad =
+        await Ad.findById(id);
+
+      if (!ad) {
+        return res.status(404).json({
+          success: false,
+          error:
+            'Advertisement not found'
+        });
+      }
+
+      const {
+        type,
+        link,
+        position,
+        text,
+        active
+      } = req.body;
+
+      if (type !== undefined) {
+        ad.type = type;
+      }
+
+      if (link !== undefined) {
+        ad.link = link;
+      }
+
+      if (position !== undefined) {
+        ad.position = position;
+      }
+
+      if (text !== undefined) {
+        ad.text = text;
+      }
+
+      if (active !== undefined) {
+        ad.active =
+          active === true ||
+          active === 'true';
+      }
+
+      if (req.file) {
+
+        const result =
+          await uploadToCloudinary(
+            req.file.buffer,
+            'ads'
+          );
+
+        if (
+          !result ||
+          !result.secure_url
+        ) {
+          return res.status(500).json({
+            success: false,
+            error:
+              'Cloudinary did not return an ad URL'
+          });
+        }
+
+        ad.file =
+          result.secure_url;
+
+        ad.cloudinary_public_id =
+          result.public_id || '';
+      }
+
+      await ad.save();
+
+      try {
+
+        await AuditLog.create({
+          username:
+            req.user?.username ||
+            'Unknown',
+
+          action:
+            `Updated advertisement: ${ad._id}`,
+
+          ip_address:
+            req.ip ||
+            req.headers['x-forwarded-for'] ||
+            ''
+        });
+
+      } catch (auditError) {
+
+        console.error(
+          'Ad update audit log error:',
+          auditError.message
+        );
+
+      }
+
+      res.status(200).json({
+        success: true,
+        message:
+          'Advertisement updated successfully',
+
+        ad: {
+          ...ad.toObject(),
+          id: ad._id
+        }
+      });
+
+    } catch (err) {
+
+      console.error(
+        'UPDATE AD ERROR:',
+        err
+      );
+
+      res.status(500).json({
+        success: false,
+        error:
+          'Failed to update advertisement',
+        details: err.message
+      });
+
+    }
+
+  }
+);
+
+
+// ======================================================
+// 4. DELETE AD
+// ======================================================
+
+router.delete(
+  '/ads/:id',
+  auth,
+  requireRole('Admin'),
+
+  async (req, res) => {
+
+    try {
+
+      const { id } = req.params;
+
+      if (
+        !mongoose.Types.ObjectId.isValid(id)
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid ad id'
+        });
+      }
+
+      const ad =
+        await Ad.findById(id);
+
+      if (!ad) {
+        return res.status(404).json({
+          success: false,
+          error:
+            'Advertisement not found'
+        });
+      }
+
+      await Ad.findByIdAndDelete(id);
+
+      try {
+
+        await AuditLog.create({
+          username:
+            req.user?.username ||
+            'Unknown',
+
+          action:
+            `Deleted advertisement: ${ad._id}`,
+
+          ip_address:
+            req.ip ||
+            req.headers['x-forwarded-for'] ||
+            ''
+        });
+
+      } catch (auditError) {
+
+        console.error(
+          'Ad delete audit log error:',
+          auditError.message
+        );
+
+      }
+
+      res.json({
+        success: true,
+        message:
+          'Advertisement deleted successfully'
+      });
+
+    } catch (err) {
+
+      console.error(
+        'DELETE AD ERROR:',
+        err
+      );
+
+      res.status(500).json({
+        success: false,
+        error:
+          'Failed to delete advertisement',
+        details: err.message
+      });
+
+    }
+
+  }
+);
+
+
+
 // ================= SUBSCRIBERS =================
 
 
@@ -1195,6 +1678,189 @@ error:err.message
 }
 
 });
+
+
+// ======================================================
+// 5. GET ALL SUBSCRIBERS
+// ======================================================
+
+router.get(
+  '/subscribers',
+  auth,
+  requireRole('Admin', 'Editor'),
+
+  async (req, res) => {
+
+    try {
+
+      const subscribers =
+        await Subscriber.find()
+          .sort({
+            createdAt: -1
+          })
+          .lean();
+
+      res.json({
+
+        success: true,
+
+        total:
+          subscribers.length,
+
+        subscribers:
+          subscribers.map(
+            (subscriber) => ({
+              ...subscriber,
+
+              id:
+                subscriber._id,
+
+              created_at:
+                subscriber.createdAt
+            })
+          )
+
+      });
+
+    } catch (err) {
+
+      console.error(
+        'GET SUBSCRIBERS ERROR:',
+        err
+      );
+
+      res.status(500).json({
+
+        success: false,
+
+        error:
+          'Failed to fetch subscribers',
+
+        details:
+          err.message
+
+      });
+
+    }
+
+  }
+);
+
+
+// ======================================================
+// 6. DELETE SUBSCRIBER
+// ======================================================
+
+router.delete(
+  '/subscribers/:id',
+  auth,
+  requireRole('Admin'),
+
+  async (req, res) => {
+
+    try {
+
+      const { id } = req.params;
+
+      if (
+        !mongoose.Types.ObjectId.isValid(id)
+      ) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          error:
+            'Invalid subscriber id'
+
+        });
+
+      }
+
+      const subscriber =
+        await Subscriber.findById(id);
+
+      if (!subscriber) {
+
+        return res.status(404).json({
+
+          success: false,
+
+          error:
+            'Subscriber not found'
+
+        });
+
+      }
+
+      const email =
+        subscriber.email;
+
+      await Subscriber.findByIdAndDelete(
+        id
+      );
+
+      try {
+
+        await AuditLog.create({
+
+          username:
+            req.user?.username ||
+            'Unknown',
+
+          action:
+            `Deleted subscriber: ${email}`,
+
+          ip_address:
+            req.ip ||
+            req.headers['x-forwarded-for'] ||
+            ''
+
+        });
+
+      } catch (auditError) {
+
+        console.error(
+          'Subscriber delete audit log error:',
+          auditError.message
+        );
+
+      }
+
+      res.json({
+
+        success: true,
+
+        message:
+          'Subscriber deleted successfully'
+
+      });
+
+    } catch (err) {
+
+      console.error(
+        'DELETE SUBSCRIBER ERROR:',
+        err
+      );
+
+      res.status(500).json({
+
+        success: false,
+
+        error:
+          'Failed to delete subscriber',
+
+        details:
+          err.message
+
+      });
+
+    }
+
+  }
+);
+
+
 
 
 
@@ -1446,4 +2112,5 @@ error:error.message
 }
 
 });
+
 module.exports = router;
