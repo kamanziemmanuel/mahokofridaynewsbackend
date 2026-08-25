@@ -468,235 +468,449 @@ error:err.message
 
 // ================= COMMENTS =================
 
+// PUBLIC: ONLY APPROVED COMMENTS
+router.get('/comments/story/:id', async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid story id'
+      });
+    }
 
-// GET COMMENTS BY STORY
-router.get('/comments/story/:id', async(req,res)=>{
+    const comments = await Comment.find({
+      story_id: req.params.id,
+      status: 'approved'
+    })
+      .sort({ createdAt: -1 })
+      .lean();
 
-try{
+    res.json(
+      comments.map(c => ({
+        ...c,
+        id: c._id,
+        created_at: c.createdAt
+      }))
+    );
+
+  } catch (err) {
+    console.error('GET STORY COMMENTS ERROR:', err);
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch comments',
+      details: err.message
+    });
+  }
+});
 
 
-// UPDATED: Only fetch approved comments for the public page
-const comments = await Comment.find({
+// ADMIN: GET COMMENTS
+router.get(
+  '/comments',
+  auth,
+  requireRole('Admin', 'Editor'),
+  async (req, res) => {
+    try {
+      const {
+        status = 'pending',
+        story_id,
+        page = 1,
+        limit = 20
+      } = req.query;
 
-story_id:req.params.id,
+      const pageNumber = Math.max(
+        parseInt(page) || 1,
+        1
+      );
 
-status: 'approved' 
+      const limitNumber = Math.min(
+        Math.max(parseInt(limit) || 20, 1),
+        100
+      );
 
-})
-.sort({
-createdAt:-1
-})
-.lean();
+      const query = {};
 
+      if (story_id) {
+        if (!mongoose.Types.ObjectId.isValid(story_id)) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid story id'
+          });
+        }
 
+        query.story_id = story_id;
+      }
 
-res.json(
-comments.map(c=>({
+      if (status && status !== 'all') {
+        const allowedStatuses = [
+          'pending',
+          'approved',
+          'spam',
+          'rejected'
+        ];
 
-...c,
+        if (!allowedStatuses.includes(status)) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid comment status'
+          });
+        }
 
-id:c._id,
+        query.status = status;
+      }
 
-created_at:c.createdAt
+      const skip =
+        (pageNumber - 1) * limitNumber;
 
-}))
+      const total =
+        await Comment.countDocuments(query);
+
+      const comments =
+        await Comment.find(query)
+          .populate('story_id', 'title')
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limitNumber)
+          .lean();
+
+      res.json({
+        success: true,
+
+        comments: comments.map(c => ({
+          ...c,
+          id: c._id,
+          story_title:
+            c.story_id?.title || '',
+          created_at: c.createdAt
+        })),
+
+        total,
+
+        page: pageNumber,
+
+        limit: limitNumber,
+
+        totalPages:
+          Math.ceil(total / limitNumber)
+      });
+
+    } catch (err) {
+      console.error(
+        'GET ALL COMMENTS ERROR:',
+        err
+      );
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch comments',
+        details: err.message
+      });
+    }
+  }
 );
-
-
-
-}catch(err){
-
-res.status(500).json({
-
-error:err.message
-
-});
-
-}
-
-});
-
-
-
-
-// GET ALL COMMENTS ADMIN
-
-router.get('/comments',
-auth,
-async(req,res)=>{
-
-try{
-
-
-const {
-
-status='pending',
-
-story_id,
-
-page=1,
-
-limit=20
-
-}=req.query;
-
-
-
-const query={};
-
-
-
-if(status)
-
-query.status=status;
-
-
-
-if(story_id)
-
-query.story_id=story_id;
-
-
-
-const skip =
-(parseInt(page)-1) *
-parseInt(limit);
-
-
-
-const comments =
-await Comment.find(query)
-
-.populate(
-'story_id',
-'title'
-)
-
-.sort({
-createdAt:-1
-})
-
-.skip(skip)
-
-.limit(parseInt(limit))
-
-.lean();
-
-
-res.json(
-
-comments.map(c=>({
-
-...c,
-
-id:c._id,
-
-story_title:
-c.story_id?.title || '',
-
-created_at:c.createdAt
-
-}))
-
-);
-
-
-
-}catch(err){
-
-res.status(500).json({
-
-error:err.message
-
-});
-
-}
-
-
-});
-
-
 
 
 // CREATE COMMENT
+router.post('/comments', async (req, res) => {
+  try {
+    const {
+      story_id,
+      parent_id,
+      name,
+      email,
+      comment
+    } = req.body;
 
-router.post('/comments',
-async(req,res)=>{
+    if (
+      !story_id ||
+      !mongoose.Types.ObjectId.isValid(story_id)
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: 'Valid story id is required'
+      });
+    }
 
-try{
+    if (!comment || !comment.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Comment text required'
+      });
+    }
 
+    const newComment =
+      await Comment.create({
+        story_id,
 
-const {
+        parent_id:
+          parent_id || null,
 
-story_id,
+        name:
+          name?.trim() || 'BANYA',
 
-parent_id,
+        email:
+          email?.trim() || '',
 
-name,
+        comment:
+          comment.trim(),
 
-email,
+        status: 'pending'
+      });
 
-comment
+    res.status(201).json({
+      success: true,
+      id: newComment._id,
+      message:
+        'Comment submitted and waiting for approval'
+    });
 
-}=req.body;
+  } catch (err) {
+    console.error(
+      'CREATE COMMENT ERROR:',
+      err
+    );
 
-
-
-if(!comment?.trim())
-
-return res.status(400).json({
-
-error:"Comment text required"
-
+    res.status(500).json({
+      success: false,
+      error: 'Failed to submit comment',
+      details: err.message
+    });
+  }
 });
 
 
-const newComment =
-await Comment.create({
+// APPROVE COMMENT
+router.put(
+  '/comments/:id/approve',
+  auth,
+  requireRole('Admin', 'Editor'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
 
-story_id,
+      if (
+        !mongoose.Types.ObjectId.isValid(id)
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid comment id'
+        });
+      }
 
-parent_id:
-parent_id || null,
+      const comment =
+        await Comment.findById(id);
 
-name:
-name?.trim() || "BANYA",
+      if (!comment) {
+        return res.status(404).json({
+          success: false,
+          error: 'Comment not found'
+        });
+      }
 
-email:
-email || "",
+      comment.status = 'approved';
 
-comment:
-comment.trim(),
+      await comment.save();
 
-status:"pending"
+      try {
+        await AuditLog.create({
+          username:
+            req.user?.username ||
+            'Unknown',
 
-});
+          action:
+            `Approved comment: ${comment._id}`,
+
+          ip_address:
+            req.ip ||
+            req.headers['x-forwarded-for'] ||
+            ''
+        });
+      } catch (auditError) {
+        console.error(
+          'Approve comment audit error:',
+          auditError.message
+        );
+      }
+
+      res.json({
+        success: true,
+        message:
+          'Comment approved successfully',
+
+        comment: {
+          ...comment.toObject(),
+          id: comment._id
+        }
+      });
+
+    } catch (err) {
+      console.error(
+        'APPROVE COMMENT ERROR:',
+        err
+      );
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to approve comment',
+        details: err.message
+      });
+    }
+  }
+);
 
 
+// REJECT / SPAM COMMENT
+router.put(
+  '/comments/:id/spam',
+  auth,
+  requireRole('Admin', 'Editor'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
 
-res.status(201).json({
+      if (
+        !mongoose.Types.ObjectId.isValid(id)
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid comment id'
+        });
+      }
 
-id:newComment._id,
+      const comment =
+        await Comment.findById(id);
 
-message:"Comment submitted"
+      if (!comment) {
+        return res.status(404).json({
+          success: false,
+          error: 'Comment not found'
+        });
+      }
 
-});
+      comment.status = 'spam';
+
+      await comment.save();
+
+      try {
+        await AuditLog.create({
+          username:
+            req.user?.username ||
+            'Unknown',
+
+          action:
+            `Marked comment as spam: ${comment._id}`,
+
+          ip_address:
+            req.ip ||
+            req.headers['x-forwarded-for'] ||
+            ''
+        });
+      } catch (auditError) {
+        console.error(
+          'Spam comment audit error:',
+          auditError.message
+        );
+      }
+
+      res.json({
+        success: true,
+        message:
+          'Comment rejected successfully',
+
+        comment: {
+          ...comment.toObject(),
+          id: comment._id
+        }
+      });
+
+    } catch (err) {
+      console.error(
+        'SPAM COMMENT ERROR:',
+        err
+      );
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to reject comment',
+        details: err.message
+      });
+    }
+  }
+);
 
 
+// DELETE COMMENT
+router.delete(
+  '/comments/:id',
+  auth,
+  requireRole('Admin'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
 
-}catch(err){
+      if (
+        !mongoose.Types.ObjectId.isValid(id)
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid comment id'
+        });
+      }
 
+      const comment =
+        await Comment.findById(id);
 
-res.status(500).json({
+      if (!comment) {
+        return res.status(404).json({
+          success: false,
+          error: 'Comment not found'
+        });
+      }
 
-error:err.message
+      await Comment.findByIdAndDelete(id);
 
-});
+      try {
+        await AuditLog.create({
+          username:
+            req.user?.username ||
+            'Unknown',
 
+          action:
+            `Deleted comment: ${comment._id}`,
 
-}
+          ip_address:
+            req.ip ||
+            req.headers['x-forwarded-for'] ||
+            ''
+        });
+      } catch (auditError) {
+        console.error(
+          'Delete comment audit error:',
+          auditError.message
+        );
+      }
 
-});
+      res.json({
+        success: true,
+        message:
+          'Comment deleted successfully'
+      });
+
+    } catch (err) {
+      console.error(
+        'DELETE COMMENT ERROR:',
+        err
+      );
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to delete comment',
+        details: err.message
+      });
+    }
+  }
+);
 
 
 
