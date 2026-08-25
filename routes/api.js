@@ -368,8 +368,6 @@ error:err.message
 
 
 
-
-
 // CREATE AUTHOR
 
 router.post(
@@ -477,9 +475,12 @@ router.get('/comments/story/:id', async(req,res)=>{
 try{
 
 
+// UPDATED: Only fetch approved comments for the public page
 const comments = await Comment.find({
 
-story_id:req.params.id
+story_id:req.params.id,
+
+status: 'approved' 
 
 })
 .sort({
@@ -582,8 +583,6 @@ createdAt:-1
 .lean();
 
 
-
-
 res.json(
 
 comments.map(c=>({
@@ -652,8 +651,6 @@ error:"Comment text required"
 });
 
 
-
-
 const newComment =
 await Comment.create({
 
@@ -700,8 +697,6 @@ error:err.message
 }
 
 });
-
-
 
 
 
@@ -753,8 +748,6 @@ error:err.message
 
 
 });
-
-
 
 
 
@@ -851,8 +844,6 @@ category:category || "General"
 });
 
 
-
-
 await AuditLog.create({
 
 username:req.user.username,
@@ -860,8 +851,6 @@ username:req.user.username,
 action:`Added video: ${title}`
 
 });
-
-
 
 
 res.status(201).json({
@@ -1126,8 +1115,6 @@ router.delete(
 
 
 
-
-
 // ================= ADS =================
 
 
@@ -1161,8 +1148,6 @@ createdAt:-1
 .lean();
 
 
-
-
 res.json(
 
 ads.map(a=>({
@@ -1191,8 +1176,6 @@ error:err.message
 
 
 });
-
-
 
 
 
@@ -1242,8 +1225,6 @@ error:err.message
 
 
 });
-
-
 
 
 
@@ -1327,8 +1308,6 @@ active:true
 });
 
 
-
-
 await AuditLog.create({
 
 username:req.user.username,
@@ -1336,8 +1315,6 @@ username:req.user.username,
 action:"Created advertisement"
 
 });
-
-
 
 
 res.status(201).json({
@@ -1902,13 +1879,13 @@ Story.aggregate([
 
 {
 
-$group:{
+ $group:{
 
 _id:null,
 
 total:{
 
-$sum:"$views"
+ $sum:"$views"
 
 }
 
@@ -1956,8 +1933,6 @@ views:-1
 ]);
 
 
-
-
 res.json({
 
 stories,
@@ -1995,8 +1970,6 @@ error:err.message
 
 
 
-
-
 // ================= BREAKING =================
 
 
@@ -2025,8 +1998,6 @@ createdAt:-1
 .limit(8)
 
 .lean();
-
-
 
 
 res.json(
