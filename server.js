@@ -10,22 +10,37 @@ const connectDB = require('./db');
 
 const app = express();
 
-// ================= RENDER PROXY =================
+// =====================================================
+// RENDER PROXY
+// =====================================================
 
 app.set('trust proxy', 1);
 
-// ================= PORT =================
+// =====================================================
+// PORT
+// =====================================================
 
 const PORT = process.env.PORT || 5000;
 
-// ================= CORS =================
+// =====================================================
+// URLs
+// =====================================================
 
-// Frontend domains allowed to communicate with this backend
+const FRONTEND_URL = 'https://mahokofridaynews.com';
+const WWW_FRONTEND_URL = 'https://www.mahokofridaynews.com';
+const OLD_FRONTEND_URL = 'https://mahokofridaynews.onrender.com';
+
+const BACKEND_URL =
+  'https://mahokofridaynewsbackend.onrender.com';
+
+// =====================================================
+// CORS
+// =====================================================
+
 const allowedOrigins = [
-  'https://mahokofridaynews.com',
-  'https://www.mahokofridaynews.com',
-  'https://mahokofridaynews.onrender.com',
-  'https://mahokofridaynews.onrender.com',
+  FRONTEND_URL,
+  WWW_FRONTEND_URL,
+  OLD_FRONTEND_URL,
   'http://localhost:3000',
   'http://localhost:5173'
 ];
@@ -33,8 +48,8 @@ const allowedOrigins = [
 const corsOptions = {
   origin: function (origin, callback) {
 
-    // Allow requests without Origin header
-    // (Postman, mobile apps, server-to-server requests, etc.)
+    // Requests without Origin:
+    // Postman, server-to-server, mobile apps, etc.
     if (!origin) {
       return callback(null, true);
     }
@@ -73,10 +88,12 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Handle preflight requests
+// Preflight
 app.options('*', cors(corsOptions));
 
-// ================= SECURITY =================
+// =====================================================
+// SECURITY
+// =====================================================
 
 app.use(
   helmet({
@@ -86,7 +103,9 @@ app.use(
   })
 );
 
-// ================= BODY =================
+// =====================================================
+// BODY PARSER
+// =====================================================
 
 app.use(
   express.json({
@@ -101,7 +120,9 @@ app.use(
   })
 );
 
-// ================= RATE LIMIT =================
+// =====================================================
+// RATE LIMIT
+// =====================================================
 
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -127,21 +148,22 @@ const loginLimiter = rateLimit({
   }
 });
 
-// Login rate limit
+// Login protection
 app.use(
   '/api/auth/login',
   loginLimiter
 );
 
-// API rate limit
+// General API protection
 app.use(
   '/api',
   apiLimiter
 );
 
-// ================= UPLOADS =================
+// =====================================================
+// UPLOADS
+// =====================================================
 
-// Serve uploaded images/files
 app.use(
   '/uploads',
   express.static(
@@ -149,28 +171,28 @@ app.use(
   )
 );
 
-// ================= HEALTH CHECK =================
+// =====================================================
+// HEALTH CHECK
+// =====================================================
 
 app.get(
   '/health',
   (req, res) => {
 
     res.status(200).json({
-
       status: 'ok',
-
       service: 'MFN Backend',
-
       database: 'MongoDB',
-
+      frontend: FRONTEND_URL,
       time: new Date().toISOString()
-
     });
 
   }
 );
 
-// ================= API ROOT =================
+// =====================================================
+// API ROOT
+// =====================================================
 
 app.get(
   '/api',
@@ -184,14 +206,24 @@ app.get(
 
       service: 'MFN Backend',
 
-      frontend: 'https://mahokofridaynews.com'
+      frontend: FRONTEND_URL,
+
+      backend: BACKEND_URL,
+
+      endpoints: {
+        auth: '/api/auth',
+        stories: '/api/stories',
+        uploads: '/uploads'
+      }
 
     });
 
   }
 );
 
-// ================= ROUTES =================
+// =====================================================
+// API ROUTES
+// =====================================================
 
 // Authentication
 app.use(
@@ -213,7 +245,9 @@ app.use(
 
 console.log('API routes loaded');
 
-// ================= 404 =================
+// =====================================================
+// 404
+// =====================================================
 
 app.use(
   (req, res) => {
@@ -229,7 +263,9 @@ app.use(
   }
 );
 
-// ================= ERROR HANDLER =================
+// =====================================================
+// ERROR HANDLER
+// =====================================================
 
 app.use(
   (err, req, res, next) => {
@@ -240,7 +276,9 @@ app.use(
     );
 
     // CORS error
-    if (err.message === 'Not allowed by CORS') {
+    if (
+      err.message === 'Not allowed by CORS'
+    ) {
 
       return res.status(403).json({
         error: 'CORS origin not allowed'
@@ -260,7 +298,9 @@ app.use(
   }
 );
 
-// ================= START SERVER =================
+// =====================================================
+// START SERVER
+// =====================================================
 
 const start = async () => {
 
@@ -290,11 +330,19 @@ const start = async () => {
         );
 
         console.log(
-          `🌐 Frontend: https://mahokofridaynews.com`
+          `🌐 Frontend: ${FRONTEND_URL}`
         );
 
         console.log(
-          `🔌 API: https://mahokofridaynewsbackend.onrender.com/api`
+          `🔌 Backend: ${BACKEND_URL}`
+        );
+
+        console.log(
+          `📡 API: ${BACKEND_URL}/api`
+        );
+
+        console.log(
+          `❤️ Health: ${BACKEND_URL}/health`
         );
 
       }
@@ -312,5 +360,9 @@ const start = async () => {
   }
 
 };
+
+// =====================================================
+// RUN
+// =====================================================
 
 start();
