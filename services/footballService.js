@@ -1,74 +1,215 @@
-const axios = require('axios');
+// =====================================================
+// MFN SPORTS SERVICE
+// API-FOOTBALL
+// =====================================================
 
 const FOOTBALL_API_URL =
   'https://v3.football.api-sports.io';
 
-const LEAGUES = {
-  EPL: 39,
-  LA_LIGA: 140,
-  SERIE_A: 135,
-  BUNDESLIGA: 78,
-  LIGUE_1: 61
-};
+const FOOTBALL_API_KEY =
+  process.env.FOOTBALL_API_KEY;
 
-/**
- * Get fixtures for a specific league and season
- */
-const getLeagueFixtures = async (leagueId, season) => {
-  if (!process.env.FOOTBALL_API_KEY) {
+// =====================================================
+// BASE REQUEST
+// =====================================================
+
+const footballRequest = async (
+  endpoint,
+  params = {}
+) => {
+
+  if (!FOOTBALL_API_KEY) {
     throw new Error(
-      'FOOTBALL_API_KEY is missing from environment variables'
+      'FOOTBALL_API_KEY is not configured.'
     );
   }
 
-  const response = await axios.get(
-    `${FOOTBALL_API_URL}/fixtures`,
-    {
-      params: {
-        league: leagueId,
-        season
-      },
-      headers: {
-        'x-apisports-key':
-          process.env.FOOTBALL_API_KEY
-      },
-      timeout: 15000
+  const searchParams =
+    new URLSearchParams();
+
+  Object.entries(params).forEach(
+    ([key, value]) => {
+
+      if (
+        value !== undefined &&
+        value !== null &&
+        value !== ''
+      ) {
+        searchParams.append(
+          key,
+          value
+        );
+      }
+
     }
   );
 
-  return response.data;
-};
+  const url =
+    `${FOOTBALL_API_URL}/${endpoint}?${searchParams.toString()}`;
 
-/**
- * Get fixtures for all configured leagues
- */
-const getAllLeagueFixtures = async season => {
-  const results = {};
+  const response = await fetch(
+    url,
+    {
+      method: 'GET',
 
-  for (const [name, leagueId] of Object.entries(LEAGUES)) {
-    try {
-      results[name] = await getLeagueFixtures(
-        leagueId,
-        season
-      );
-    } catch (error) {
-      console.error(
-        `Failed to load ${name}:`,
-        error.message
-      );
+      headers: {
+        'x-apisports-key':
+          FOOTBALL_API_KEY,
 
-      results[name] = {
-        response: [],
-        errors: [error.message]
-      };
+        Accept:
+          'application/json'
+      }
     }
+  );
+
+  const data =
+    await response.json();
+
+  if (!response.ok) {
+
+    const error =
+      new Error(
+        'API-Football request failed.'
+      );
+
+    error.status =
+      response.status;
+
+    error.details =
+      data;
+
+    throw error;
   }
 
-  return results;
+  return data;
 };
 
+// =====================================================
+// FIXTURES
+// =====================================================
+
+const getFixtures = async (
+  params = {}
+) => {
+
+  return footballRequest(
+    'fixtures',
+    params
+  );
+
+};
+
+// =====================================================
+// LEAGUES
+// =====================================================
+
+const getLeagues = async (
+  params = {}
+) => {
+
+  return footballRequest(
+    'leagues',
+    params
+  );
+
+};
+
+// =====================================================
+// STANDINGS
+// =====================================================
+
+const getStandings = async (
+  params = {}
+) => {
+
+  return footballRequest(
+    'standings',
+    params
+  );
+
+};
+
+// =====================================================
+// TOP SCORERS
+// =====================================================
+
+const getTopScorers = async (
+  league,
+  season
+) => {
+
+  if (!league || !season) {
+
+    throw new Error(
+      'league and season are required.'
+    );
+
+  }
+
+  return footballRequest(
+    'players/topscorers',
+    {
+      league,
+      season
+    }
+  );
+
+};
+
+// =====================================================
+// LIVE FIXTURES
+// =====================================================
+
+const getLiveFixtures = async () => {
+
+  return footballRequest(
+    'fixtures',
+    {
+      live: 'all'
+    }
+  );
+
+};
+
+// =====================================================
+// UPCOMING FIXTURES
+// =====================================================
+
+const getUpcomingFixtures = async (
+  league,
+  season,
+  next = 20
+) => {
+
+  const params = {
+    next
+  };
+
+  if (league) {
+    params.league = league;
+  }
+
+  if (season) {
+    params.season = season;
+  }
+
+  return footballRequest(
+    'fixtures',
+    params
+  );
+
+};
+
+// =====================================================
+// EXPORTS
+// =====================================================
+
 module.exports = {
-  LEAGUES,
-  getLeagueFixtures,
-  getAllLeagueFixtures
+  footballRequest,
+  getFixtures,
+  getLeagues,
+  getStandings,
+  getTopScorers,
+  getLiveFixtures,
+  getUpcomingFixtures
 };
