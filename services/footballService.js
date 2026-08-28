@@ -1,4 +1,3 @@
-
 // =====================================================
 // MFN SPORTS SERVICE
 // BIG BALLS SPORTS DATA
@@ -10,13 +9,11 @@
 // API:
 // https://api.bigballsdata.com/v1
 //
-// Environment:
+// .env:
 // BBS_API_KEY=your_bigballs_api_key
-// BBS_API_URL=https://api.bigballsdata.com/v1
 //
 // IMPORTANT:
-// Keep BBS_API_KEY only in backend .env.
-// NEVER expose it in React/frontend.
+// Never expose BBS_API_KEY in React/frontend.
 // =====================================================
 
 const BBS_API_URL =
@@ -27,7 +24,7 @@ const BBS_API_KEY =
   process.env.BBS_API_KEY;
 
 // =====================================================
-// DEFAULT FOOTBALL LEAGUES
+// DEFAULT LEAGUES
 // =====================================================
 
 const DEFAULT_LEAGUES = [
@@ -35,7 +32,8 @@ const DEFAULT_LEAGUES = [
   'laliga',
   'seriea',
   'bundesliga',
-  'ligue1'
+  'ligue1',
+  'ucl'
 ];
 
 // =====================================================
@@ -47,7 +45,8 @@ const LEAGUE_NAMES = {
   laliga: 'La Liga',
   seriea: 'Serie A',
   bundesliga: 'Bundesliga',
-  ligue1: 'Ligue 1'
+  ligue1: 'Ligue 1',
+  ucl: 'UEFA Champions League'
 };
 
 // =====================================================
@@ -92,6 +91,7 @@ const bigBallsRequest = async (
           value
         );
       }
+
     }
   );
 
@@ -178,33 +178,18 @@ const bigBallsRequest = async (
 
   if (!response.ok) {
 
-    let message =
+    const apiError =
+      data?.error ||
+      data?.message ||
+      data?.errors ||
       'Big Balls Sports Data request failed.';
 
-    if (
-      typeof data?.error === 'string'
-    ) {
-
-      message =
-        data.error;
-
-    } else if (
-      typeof data?.message === 'string'
-    ) {
-
-      message =
-        data.message;
-
-    } else if (
-      typeof data?.errors === 'string'
-    ) {
-
-      message =
-        data.errors;
-    }
-
     const error =
-      new Error(message);
+      new Error(
+        typeof apiError === 'string'
+          ? apiError
+          : 'Big Balls Sports Data request failed.'
+      );
 
     error.code =
       data?.code ||
@@ -221,21 +206,21 @@ const bigBallsRequest = async (
   }
 
   // ---------------------------------------------------
-  // API ERROR ENVELOPE
+  // PROVIDER ERROR
   // ---------------------------------------------------
 
   if (
     data &&
-    data.success === false
+    data.error &&
+    !Array.isArray(data.error)
   ) {
 
-    const message =
-      typeof data.error === 'string'
-        ? data.error
-        : 'Big Balls Sports Data returned an API error.';
-
     const error =
-      new Error(message);
+      new Error(
+        typeof data.error === 'string'
+          ? data.error
+          : 'Big Balls Sports Data returned an API error.'
+      );
 
     error.code =
       data.code ||
@@ -256,10 +241,6 @@ const bigBallsRequest = async (
 
 // =====================================================
 // SAFE REQUEST
-// =====================================================
-//
-// One failed endpoint does not break the complete
-// /api/sports/updates package.
 // =====================================================
 
 const safeBigBallsRequest = async (
@@ -299,12 +280,6 @@ const safeBigBallsRequest = async (
 
       data: {
 
-        success: false,
-
-        results: 0,
-
-        response: fallback,
-
         data: fallback,
 
         meta: {}
@@ -335,32 +310,20 @@ const safeBigBallsRequest = async (
 };
 
 // =====================================================
-// EXTRACT ARRAY
+// EXTRACT DATA
 // =====================================================
 //
-// Supports responses such as:
+// Handles:
 //
-// {
-//   response: []
-// }
+// { data: [] }
 //
-// OR
+// and:
 //
-// {
-//   data: []
-// }
-//
-// OR
-//
-// {
-//   data: {
-//      data: []
-//   }
-// }
+// { data: { ... } }
 //
 // =====================================================
 
-const extractDataArray = (
+const extractData = (
   result
 ) => {
 
@@ -371,36 +334,14 @@ const extractDataArray = (
   const payload =
     result.data;
 
-  if (!payload) {
-    return [];
-  }
-
   if (
-    Array.isArray(
-      payload.response
-    )
-  ) {
-
-    return payload.response;
-  }
-
-  if (
+    payload &&
     Array.isArray(
       payload.data
     )
   ) {
 
     return payload.data;
-  }
-
-  if (
-    payload.data &&
-    Array.isArray(
-      payload.data.data
-    )
-  ) {
-
-    return payload.data.data;
   }
 
   if (
@@ -416,11 +357,35 @@ const extractDataArray = (
 };
 
 // =====================================================
-// GET FIXTURES
+// EXTRACT META
+// =====================================================
+
+const extractMeta = (
+  result
+) => {
+
+  if (
+    result &&
+    result.data &&
+    result.data.meta
+  ) {
+
+    return result.data.meta;
+  }
+
+  return {};
+};
+
+// =====================================================
+// FIXTURES
 // =====================================================
 //
 // GET /v1/matches
 //
+// Official Big Balls pattern:
+// /v1/matches?sport=football&league=epl
+//
+// This endpoint returns live + scheduled matches.
 // =====================================================
 
 const getFixtures = async (
@@ -437,10 +402,8 @@ const getFixtures = async (
 };
 
 // =====================================================
-// GET LIVE MATCHES
+// LIVE MATCHES
 // =====================================================
-//
-// Big Balls:
 //
 // GET /v1/matches?sport=football&status=live
 //
@@ -458,25 +421,30 @@ const getLiveMatches = async () => {
 };
 
 // =====================================================
-// ALIAS
+// LIVE FIXTURES
 // =====================================================
 //
-// Some older routes use getLiveFixtures.
-// Keep both names available.
+// Alias kept for compatibility with sports.js
 // =====================================================
 
 const getLiveFixtures = async () => {
 
   return getLiveMatches();
-
 };
 
 // =====================================================
-// GET UPCOMING MATCHES
+// UPCOMING / SCHEDULED MATCHES
 // =====================================================
 //
-// GET /v1/matches
+// IMPORTANT:
 //
+// Big Balls does NOT require status=upcoming.
+//
+// The normal /matches endpoint returns scheduled
+// and recent matches.
+//
+// We therefore fetch matches and filter future dates
+// locally.
 // =====================================================
 
 const getUpcomingFixtures = async (
@@ -486,42 +454,116 @@ const getUpcomingFixtures = async (
 ) => {
 
   const params = {
-
-    sport:
-      'football',
-
-    status:
-      'upcoming',
-
-    limit:
-      next
-
+    sport: 'football',
+    limit: Math.max(
+      Number(next) || 20,
+      20
+    )
   };
 
   if (league) {
-
-    params.league =
-      league;
+    params.league = league;
   }
 
   if (season) {
-
-    params.season =
-      season;
+    params.season = season;
   }
 
-  return bigBallsRequest(
-    'matches',
-    params
-  );
+  const result =
+    await bigBallsRequest(
+      'matches',
+      params
+    );
+
+  const matches =
+    extractData({
+      data: result
+    });
+
+  const now =
+    Date.now();
+
+  const getMatchDate = (
+    match
+  ) => {
+
+    return (
+      match?.date ||
+      match?.start_time ||
+      match?.startTime ||
+      match?.kickoff ||
+      match?.scheduled_at ||
+      match?.scheduledAt ||
+      null
+    );
+  };
+
+  const upcoming =
+    matches
+      .filter(
+        (match) => {
+
+          const date =
+            getMatchDate(
+              match
+            );
+
+          if (!date) {
+            return false;
+          }
+
+          const timestamp =
+            new Date(
+              date
+            ).getTime();
+
+          return (
+            !Number.isNaN(
+              timestamp
+            ) &&
+            timestamp > now
+          );
+        }
+      )
+      .sort(
+        (a, b) => {
+
+          const dateA =
+            new Date(
+              getMatchDate(a)
+            ).getTime();
+
+          const dateB =
+            new Date(
+              getMatchDate(b)
+            ).getTime();
+
+          return dateA - dateB;
+        }
+      )
+      .slice(
+        0,
+        Number(next) || 20
+      );
+
+  return {
+
+    ...result,
+
+    data:
+      upcoming,
+
+    results:
+      upcoming.length
+
+  };
 };
 
 // =====================================================
-// GET LEAGUES
+// LEAGUES
 // =====================================================
 //
 // GET /v1/leagues?sport=football
-//
 // =====================================================
 
 const getLeagues = async (
@@ -531,24 +573,17 @@ const getLeagues = async (
   return bigBallsRequest(
     'leagues',
     {
-      sport:
-        'football',
-
+      sport: 'football',
       ...params
     }
   );
 };
 
 // =====================================================
-// GET STANDINGS
+// STANDINGS
 // =====================================================
 //
-// GET /v1/standings
-//
-// Required:
-//
-// league=epl
-//
+// GET /v1/standings?sport=football&league=epl
 // =====================================================
 
 const getStandings = async (
@@ -585,17 +620,13 @@ const getStandings = async (
 };
 
 // =====================================================
-// GET TOP SCORERS
+// TOP SCORERS
 // =====================================================
 //
-// Verified Big Balls endpoint:
-//
-// /v1/leagues/epl/top-scorers
+// GET /v1/leagues/:id/top-scorers
 //
 // Example:
-//
-// /api/sports/top-scorers?league=epl
-//
+// /v1/leagues/epl/top-scorers
 // =====================================================
 
 const getTopScorers = async (
@@ -613,7 +644,8 @@ const getTopScorers = async (
 
   const params = {
 
-    limit
+    limit:
+      Number(limit) || 20
 
   };
 
@@ -632,7 +664,7 @@ const getTopScorers = async (
 };
 
 // =====================================================
-// GET SPORTS UPDATES
+// SPORTS UPDATES PACKAGE
 // =====================================================
 //
 // Single package for frontend:
@@ -642,12 +674,13 @@ const getTopScorers = async (
 // leagues
 // standings
 // topScorers
+// errors
 //
 // =====================================================
 
 const getSportsUpdates = async ({
   leagues = [],
-  season = null
+  season
 } = {}) => {
 
   // ---------------------------------------------------
@@ -657,7 +690,9 @@ const getSportsUpdates = async ({
   const selectedLeagues =
     Array.isArray(leagues) &&
     leagues.length > 0
+
       ? leagues
+
       : DEFAULT_LEAGUES;
 
   // ---------------------------------------------------
@@ -677,21 +712,29 @@ const getSportsUpdates = async ({
     );
 
   // ---------------------------------------------------
-  // UPCOMING
+  // ALL MATCHES
+  // ---------------------------------------------------
+  //
+  // We do NOT use status=upcoming.
+  //
+  // Big Balls returns scheduled + recent matches
+  // from /matches.
+  //
   // ---------------------------------------------------
 
-  const upcomingPromise =
+  const fixturesPromise =
     safeBigBallsRequest(
       'matches',
       {
         sport:
           'football',
 
-        status:
-          'upcoming',
-
         limit:
-          20
+          100,
+
+        ...(season
+          ? { season }
+          : {})
       }
     );
 
@@ -714,7 +757,9 @@ const getSportsUpdates = async ({
 
   const standingsPromises =
     selectedLeagues.map(
-      async (league) => {
+      async (
+        league
+      ) => {
 
         const result =
           await safeBigBallsRequest(
@@ -726,9 +771,7 @@ const getSportsUpdates = async ({
               league,
 
               ...(season
-                ? {
-                    season
-                  }
+                ? { season }
                 : {})
             }
           );
@@ -753,7 +796,9 @@ const getSportsUpdates = async ({
 
   const topScorersPromises =
     selectedLeagues.map(
-      async (league) => {
+      async (
+        league
+      ) => {
 
         const result =
           await safeBigBallsRequest(
@@ -765,9 +810,7 @@ const getSportsUpdates = async ({
                 20,
 
               ...(season
-                ? {
-                    season
-                  }
+                ? { season }
                 : {})
             }
           );
@@ -787,12 +830,12 @@ const getSportsUpdates = async ({
     );
 
   // ---------------------------------------------------
-  // WAIT FOR ALL
+  // WAIT
   // ---------------------------------------------------
 
   const [
     liveResult,
-    upcomingResult,
+    fixturesResult,
     leaguesResult,
     standingsData,
     topScorersData
@@ -800,7 +843,7 @@ const getSportsUpdates = async ({
 
     livePromise,
 
-    upcomingPromise,
+    fixturesPromise,
 
     leaguesPromise,
 
@@ -819,42 +862,115 @@ const getSportsUpdates = async ({
   // ===================================================
 
   const liveMatches =
-    extractDataArray(
+    extractData(
       liveResult
     );
 
   const liveMeta =
-    liveResult.data?.meta ||
-    {};
-
-  // ===================================================
-  // UPCOMING DATA
-  // ===================================================
-
-  const upcomingMatches =
-    extractDataArray(
-      upcomingResult
+    extractMeta(
+      liveResult
     );
 
-  const upcomingMeta =
-    upcomingResult.data?.meta ||
-    {};
+  // ===================================================
+  // FIXTURES DATA
+  // ===================================================
+
+  const allFixtures =
+    extractData(
+      fixturesResult
+    );
+
+  const fixturesMeta =
+    extractMeta(
+      fixturesResult
+    );
+
+  // ---------------------------------------------------
+  // FIND UPCOMING
+  // ---------------------------------------------------
+
+  const now =
+    Date.now();
+
+  const getMatchDate = (
+    match
+  ) => {
+
+    return (
+      match?.date ||
+      match?.start_time ||
+      match?.startTime ||
+      match?.kickoff ||
+      match?.scheduled_at ||
+      match?.scheduledAt ||
+      null
+    );
+  };
+
+  const upcomingMatches =
+    allFixtures
+      .filter(
+        (match) => {
+
+          const date =
+            getMatchDate(
+              match
+            );
+
+          if (!date) {
+            return false;
+          }
+
+          const timestamp =
+            new Date(
+              date
+            ).getTime();
+
+          return (
+            !Number.isNaN(
+              timestamp
+            ) &&
+            timestamp > now
+          );
+        }
+      )
+      .sort(
+        (a, b) => {
+
+          const aTime =
+            new Date(
+              getMatchDate(a)
+            ).getTime();
+
+          const bTime =
+            new Date(
+              getMatchDate(b)
+            ).getTime();
+
+          return aTime - bTime;
+        }
+      )
+      .slice(
+        0,
+        20
+      );
 
   // ===================================================
-  // LEAGUES DATA
+  // LEAGUES
   // ===================================================
 
   const leagueList =
-    extractDataArray(
+    extractData(
       leaguesResult
     );
 
   const leaguesMeta =
-    leaguesResult.data?.meta ||
-    {};
+    extractMeta(
+      leaguesResult
+    );
 
   // ===================================================
-  // NORMALIZE STANDINGS
+  // STANDINGS
   // ===================================================
 
   const standings = [];
@@ -864,42 +980,40 @@ const getSportsUpdates = async ({
   standingsData.forEach(
     (item) => {
 
-      const rows =
-        extractDataArray(
-          item
-        );
+      if (
+        item.success &&
+        item.data
+      ) {
 
-      // -------------------------------------------------
-      // IMPORTANT:
-      // results=0 is NOT treated as provider failure.
-      // It simply means no stored standings are available.
-      // -------------------------------------------------
+        const rows =
+          extractData(
+            item
+          );
 
-      standings.push({
+        standings.push({
 
-        leagueId:
-          item.league,
+          leagueId:
+            item.league,
 
-        league:
-          item.league,
+          league:
+            item.league,
 
-        leagueName:
-          item.leagueName,
+          leagueName:
+            item.leagueName,
 
-        results:
-          rows.length,
+          data:
+            rows,
 
-        data:
-          rows,
+          results:
+            rows.length,
 
-        meta:
-          item.data?.meta ||
-          {},
+          meta:
+            extractMeta(
+              item
+            )
 
-        available:
-          rows.length > 0
-
-      });
+        });
+      }
 
       if (
         !item.success &&
@@ -930,7 +1044,7 @@ const getSportsUpdates = async ({
   );
 
   // ===================================================
-  // NORMALIZE TOP SCORERS
+  // TOP SCORERS
   // ===================================================
 
   const topScorers = [];
@@ -940,36 +1054,40 @@ const getSportsUpdates = async ({
   topScorersData.forEach(
     (item) => {
 
-      const rows =
-        extractDataArray(
-          item
-        );
+      if (
+        item.success &&
+        item.data
+      ) {
 
-      topScorers.push({
+        const rows =
+          extractData(
+            item
+          );
 
-        leagueId:
-          item.league,
+        topScorers.push({
 
-        league:
-          item.league,
+          leagueId:
+            item.league,
 
-        leagueName:
-          item.leagueName,
+          league:
+            item.league,
 
-        results:
-          rows.length,
+          leagueName:
+            item.leagueName,
 
-        data:
-          rows,
+          data:
+            rows,
 
-        meta:
-          item.data?.meta ||
-          {},
+          results:
+            rows.length,
 
-        available:
-          rows.length > 0
+          meta:
+            extractMeta(
+              item
+            )
 
-      });
+        });
+      }
 
       if (
         !item.success &&
@@ -1010,7 +1128,7 @@ const getSportsUpdates = async ({
       null,
 
     fixtures:
-      upcomingResult.error ||
+      fixturesResult.error ||
       null,
 
     leagues:
@@ -1028,29 +1146,28 @@ const getSportsUpdates = async ({
   // ===================================================
   // PROVIDER STATUS
   // ===================================================
-  //
-  // Empty standings are NOT automatically a provider
-  // failure.
-  //
-  // ===================================================
 
   const hasProviderError =
     Boolean(
 
       liveResult.error ||
 
-      upcomingResult.error ||
+      fixturesResult.error ||
 
       leaguesResult.error ||
 
-      standingsErrors.length > 0 ||
+      standingsErrors.length >
 
-      topScorersErrors.length > 0
+      0 ||
+
+      topScorersErrors.length >
+
+      0
 
     );
 
   // ===================================================
-  // RETURN
+  // FINAL PACKAGE
   // ===================================================
 
   return {
@@ -1068,7 +1185,8 @@ const getSportsUpdates = async ({
       'football',
 
     season:
-      season,
+      season ||
+      null,
 
     selectedLeagues,
 
@@ -1110,7 +1228,7 @@ const getSportsUpdates = async ({
     },
 
     // -------------------------------------------------
-    // UPCOMING
+    // UPCOMING / FIXTURES
     // -------------------------------------------------
 
     fixtures: {
@@ -1122,7 +1240,24 @@ const getSportsUpdates = async ({
         upcomingMatches,
 
       meta:
-        upcomingMeta
+        fixturesMeta
+
+    },
+
+    // -------------------------------------------------
+    // ALL FIXTURES
+    // -------------------------------------------------
+
+    allFixtures: {
+
+      results:
+        allFixtures.length,
+
+      data:
+        allFixtures,
+
+      meta:
+        fixturesMeta
 
     },
 
@@ -1170,34 +1305,27 @@ const getSportsUpdates = async ({
 
 module.exports = {
 
-  // Base request
   bigBallsRequest,
 
-  // Backward-compatible name
   footballRequest:
     bigBallsRequest,
 
-  // Fixtures
+  safeBigBallsRequest,
+
   getFixtures,
 
-  // Live
   getLiveMatches,
+
   getLiveFixtures,
 
-  // Upcoming
   getUpcomingFixtures,
 
-  // Leagues
   getLeagues,
 
-  // Standings
   getStandings,
 
-  // Top scorers
   getTopScorers,
 
-  // Complete package
   getSportsUpdates
 
 };
-
