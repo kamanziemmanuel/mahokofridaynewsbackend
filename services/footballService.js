@@ -199,7 +199,261 @@ const getUpcomingFixtures = async (
   );
 
 };
+// =====================================================
+// SPORTS UPDATES PACKAGE
+// =====================================================
 
+const getSportsUpdates = async ({
+  leagues = [],
+  season = new Date().getFullYear()
+} = {}) => {
+
+  // ---------------------------------------------------
+  // Default leagues
+  // ---------------------------------------------------
+  //
+  // API-Football common league IDs:
+  //
+  // 39  = Premier League
+  // 140 = La Liga
+  // 135 = Serie A
+  // 78  = Bundesliga
+  // 61  = Ligue 1
+  // 2   = UEFA Champions League
+  //
+  // We use a smaller default set to avoid
+  // unnecessary API requests.
+  // ---------------------------------------------------
+
+  const selectedLeagues =
+    leagues.length > 0
+      ? leagues
+      : [
+          39,
+          140,
+          135,
+          78,
+          61,
+          2
+        ];
+
+  // ---------------------------------------------------
+  // Run independent API requests in parallel
+  // ---------------------------------------------------
+
+  const livePromise =
+    getLiveFixtures();
+
+  const upcomingPromise =
+    getUpcomingFixtures({
+      next: 20
+    });
+
+  const leaguesPromise =
+    getLeagues({
+      season
+    });
+
+  // ---------------------------------------------------
+  // Standings
+  // ---------------------------------------------------
+
+  const standingsPromises =
+    selectedLeagues.map(
+      (league) =>
+        getStandings(
+          league,
+          season
+        ).catch((error) => ({
+          success: false,
+          league,
+          error:
+            error.message
+        }))
+    );
+
+  // ---------------------------------------------------
+  // Top scorers
+  // ---------------------------------------------------
+
+  const topScorersPromises =
+    selectedLeagues.map(
+      (league) =>
+        getTopScorers(
+          league,
+          season
+        ).catch((error) => ({
+          success: false,
+          league,
+          error:
+            error.message
+        }))
+    );
+
+  // ---------------------------------------------------
+  // Wait for all requests
+  // ---------------------------------------------------
+
+  const [
+    liveData,
+    upcomingData,
+    leaguesData,
+    standingsData,
+    topScorersData
+  ] = await Promise.all([
+    livePromise,
+    upcomingPromise,
+    leaguesPromise,
+    Promise.all(standingsPromises),
+    Promise.all(topScorersPromises)
+  ]);
+
+  // ---------------------------------------------------
+  // Normalize standings
+  // ---------------------------------------------------
+
+  const standings = [];
+
+  standingsData.forEach(
+    (data, index) => {
+
+      const leagueId =
+        selectedLeagues[index];
+
+      if (
+        data &&
+        data.response &&
+        data.response.length > 0
+      ) {
+
+        standings.push({
+          leagueId,
+          data: data.response
+        });
+
+      }
+
+    }
+  );
+
+  // ---------------------------------------------------
+  // Normalize top scorers
+  // ---------------------------------------------------
+
+  const topScorers = [];
+
+  topScorersData.forEach(
+    (data, index) => {
+
+      const leagueId =
+        selectedLeagues[index];
+
+      if (
+        data &&
+        data.response &&
+        data.response.length > 0
+      ) {
+
+        topScorers.push({
+          leagueId,
+          data: data.response
+        });
+
+      }
+
+    }
+  );
+
+  // ---------------------------------------------------
+  // Return single package
+  // ---------------------------------------------------
+
+  return {
+
+    success: true,
+
+    provider: 'API-Football',
+
+    season,
+
+    updatedAt:
+      new Date().toISOString(),
+
+    live: {
+      results:
+        liveData.results || 0,
+
+      data:
+        liveData.response || []
+    },
+
+    fixtures: {
+      results:
+        upcomingData.results || 0,
+
+      data:
+        upcomingData.response || []
+    },
+
+    leagues: {
+      results:
+        leaguesData.results || 0,
+
+      data:
+        leaguesData.response || []
+    },
+
+    standings,
+
+    topScorers,
+
+    errors: {
+
+      live:
+        liveData.errors || [],
+
+      fixtures:
+        upcomingData.errors || [],
+
+      leagues:
+        leaguesData.errors || [],
+
+      standings:
+        standingsData
+          .filter(
+            (item) =>
+              item &&
+              item.success === false
+          )
+          .map(
+            (item) => ({
+              league:
+                item.league,
+
+              error:
+                item.error
+            })
+          ),
+
+      topScorers:
+        topScorersData
+          .filter(
+            (item) =>
+              item &&
+              item.success === false
+          )
+          .map(
+            (item) => ({
+              league:
+                item.league,
+
+              error:
+                item.error
+            })
+          )
+    }
+  };
+};
 // =====================================================
 // EXPORTS
 // =====================================================
@@ -207,9 +461,10 @@ const getUpcomingFixtures = async (
 module.exports = {
   footballRequest,
   getFixtures,
+  getLiveFixtures,
+  getUpcomingFixtures,
   getLeagues,
   getStandings,
   getTopScorers,
-  getLiveFixtures,
-  getUpcomingFixtures
+  getSportsUpdates
 };
