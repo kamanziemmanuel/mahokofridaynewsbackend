@@ -13,7 +13,8 @@ const {
   getUpcomingFixtures,
   getLeagues,
   getStandings,
-  getTopScorers
+  getTopScorers,
+  getSportsUpdates
 } = require('../services/footballService');
 
 // =====================================================
@@ -397,6 +398,104 @@ router.get(
         details:
           error.details || undefined
       });
+    }
+  }
+);
+// =====================================================
+// SPORTS UPDATES PACKAGE
+// GET /api/sports/updates
+//
+// Single endpoint for frontend.
+//
+// Example:
+// /api/sports/updates
+//
+// Optional:
+// /api/sports/updates?season=2026
+//
+// Multiple leagues:
+// /api/sports/updates?season=2026&leagues=39,140,135
+// =====================================================
+
+router.get(
+  '/updates',
+  async (req, res) => {
+
+    try {
+
+      const season =
+        Number(
+          req.query.season
+        ) ||
+        new Date().getFullYear();
+
+      // -----------------------------------------------
+      // Parse league IDs
+      // -----------------------------------------------
+
+      let leagues = [];
+
+      if (req.query.leagues) {
+
+        leagues =
+          String(
+            req.query.leagues
+          )
+            .split(',')
+            .map(
+              (id) =>
+                Number(
+                  id.trim()
+                )
+            )
+            .filter(
+              (id) =>
+                Number.isInteger(id) &&
+                id > 0
+            );
+
+      }
+
+      // -----------------------------------------------
+      // Get complete sports package
+      // -----------------------------------------------
+
+      const data =
+        await getSportsUpdates({
+          leagues,
+          season
+        });
+
+      // -----------------------------------------------
+      // Response
+      // -----------------------------------------------
+
+      return res.status(200).json(
+        data
+      );
+
+    } catch (error) {
+
+      console.error(
+        'SPORTS UPDATES ERROR:',
+        error
+      );
+
+      return res.status(
+        error.status || 500
+      ).json({
+
+        success: false,
+
+        error:
+          error.message ||
+          'Unable to retrieve sports updates.',
+
+        details:
+          error.details || undefined
+
+      });
+
     }
   }
 );
