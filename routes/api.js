@@ -232,210 +232,591 @@ router.put(
 );
 
 // ================= SPORTS =================
+// API-FOOTBALL / API-SPORTS
+// ======================================================
 
-const SPORTS_API_BASE =
-  'https://v3.football.api-sports.io';
+const SPORTS_API_BASE = 'https://v3.football.api-sports.io';
 
-const getSportsApiKey = () =>
-  process.env.API_FOOTBALL_KEY ||
-  process.env.APISPORTS_KEY ||
-  process.env.FOOTBALL_API_KEY;
+const getSportsApiKey = () => {
+  return (
+    process.env.API_FOOTBALL_KEY ||
+    process.env.APISPORTS_KEY ||
+    process.env.FOOTBALL_API_KEY ||
+    ''
+  ).trim();
+};
 
 
+// ======================================================
+// HELPER - CALL FOOTBALL API
+// ======================================================
+
+async function callFootballAPI(endpoint, params = {}) {
+
+  const apiKey = getSportsApiKey();
+
+  if (!apiKey) {
+
+    const error = new Error(
+      'Football API key is not configured on the server'
+    );
+
+    error.statusCode = 500;
+
+    throw error;
+  }
+
+
+  const url = new URL(
+    `${SPORTS_API_BASE}/${endpoint}`
+  );
+
+
+  Object.entries(params).forEach(
+    ([key, value]) => {
+
+      if (
+        value !== undefined &&
+        value !== null &&
+        String(value).trim() !== ''
+      ) {
+
+        url.searchParams.set(
+          key,
+          String(value).trim()
+        );
+
+      }
+
+    }
+  );
+
+
+  console.log(
+    '======================================'
+  );
+
+  console.log(
+    'FOOTBALL API REQUEST:',
+    url.toString()
+  );
+
+  console.log(
+    '======================================'
+  );
+
+
+  const response = await fetch(
+    url.toString(),
+    {
+      method: 'GET',
+
+      headers: {
+        'x-apisports-key': apiKey,
+        'Accept': 'application/json'
+      }
+    }
+  );
+
+
+  // IMPORTANT:
+  // Read response as text first.
+  // This prevents JSON parsing errors when
+  // API-Football returns HTML/text.
+
+  const rawText =
+    await response.text();
+
+
+  let data;
+
+
+  try {
+
+    data = rawText
+      ? JSON.parse(rawText)
+      : {};
+
+  } catch (parseError) {
+
+    console.error(
+      'FOOTBALL API INVALID JSON:',
+      rawText.substring(0, 1000)
+    );
+
+
+    const error = new Error(
+      'Football API returned an invalid response'
+    );
+
+    error.statusCode = 502;
+
+    error.externalResponse =
+      rawText.substring(0, 1000);
+
+    throw error;
+  }
+
+
+  console.log(
+    'FOOTBALL API STATUS:',
+    response.status
+  );
+
+
+  // ====================================================
+  // API-SPORTS CAN RETURN HTTP 200
+  // BUT STILL CONTAIN ERRORS
+  // ====================================================
+
+  if (
+    data &&
+    data.errors &&
+    Object.keys(data.errors).length > 0
+  ) {
+
+    console.error(
+      'FOOTBALL API ERRORS:',
+      data.errors
+    );
+
+
+    const error = new Error(
+      'Football API returned an error'
+    );
+
+    error.statusCode =
+      response.status >= 400
+        ? response.status
+        : 502;
+
+    error.externalErrors =
+      data.errors;
+
+    throw error;
+  }
+
+
+  if (!response.ok) {
+
+    const error = new Error(
+      data?.message ||
+      data?.errors?.message ||
+      `Football API HTTP ${response.status}`
+    );
+
+    error.statusCode =
+      response.status;
+
+    error.externalResponse =
+      data;
+
+    throw error;
+  }
+
+
+  return data;
+}
+
+
+
+// ======================================================
 // FIXTURES
-router.get('/sports/fixtures', async (req, res) => {
-  try {
-    const {
-      league,
-      season,
-      date,
-      from,
-      to
-    } = req.query;
+// GET /api/sports/fixtures
+// ======================================================
 
-    if (!league || !season) {
-      return res.status(400).json({
-        success: false,
-        error: 'league and season are required'
-      });
-    }
+router.get(
+  '/sports/fixtures',
+  async (req, res) => {
 
-    const apiKey = getSportsApiKey();
+    try {
 
-    if (!apiKey) {
-      return res.status(500).json({
-        success: false,
-        error: 'Football API key is not configured'
-      });
-    }
+      const {
+        league,
+        season,
+        date,
+        from,
+        to,
+        team,
+        next,
+        last,
+        status
+      } = req.query;
 
-    const params = new URLSearchParams({
-      league: String(league),
-      season: String(season)
-    });
 
-    if (from && to) {
-      params.set('from', String(from));
-      params.set('to', String(to));
-    } else if (date) {
-      params.set('date', String(date));
-    }
+      // --------------------------------------------------
+      // VALIDATION
+      // --------------------------------------------------
 
-    const response = await fetch(
-      `${SPORTS_API_BASE}/fixtures?${params.toString()}`,
-      {
-        headers: {
-          'x-apisports-key': apiKey
-        }
+      if (!league) {
+
+        return res.status(400).json({
+          success: false,
+          error: 'league is required'
+        });
+
       }
-    );
 
-    const data = await response.json();
 
-    if (!response.ok) {
-      return res.status(response.status).json({
-        success: false,
-        error: data?.message || 'Football API error',
-        response: data
+      if (!season) {
+
+        return res.status(400).json({
+          success: false,
+          error: 'season is required'
+        });
+
+      }
+
+
+      // --------------------------------------------------
+      // PARAMETERS
+      // --------------------------------------------------
+
+      const params = {
+        league,
+        season
+      };
+
+
+      // Date range
+
+      if (from && to) {
+
+        params.from = from;
+        params.to = to;
+
+      }
+
+      // Single date
+
+      else if (date) {
+
+        params.date = date;
+
+      }
+
+
+      // Optional team
+
+      if (team) {
+
+        params.team = team;
+
+      }
+
+
+      // Optional pagination
+
+      if (next) {
+
+        params.next = next;
+
+      }
+
+
+      if (last) {
+
+        params.last = last;
+
+      }
+
+
+      // Optional status
+
+      if (status) {
+
+        params.status = status;
+
+      }
+
+
+      // --------------------------------------------------
+      // API REQUEST
+      // --------------------------------------------------
+
+      const data =
+        await callFootballAPI(
+          'fixtures',
+          params
+        );
+
+
+      // --------------------------------------------------
+      // RESPONSE
+      // --------------------------------------------------
+
+      return res.status(200).json({
+
+        success: true,
+
+        results:
+          data.results || 0,
+
+        response:
+          Array.isArray(data.response)
+            ? data.response
+            : [],
+
+        paging:
+          data.paging || null,
+
+        errors:
+          data.errors || {}
+
       });
+
+
+    } catch (err) {
+
+      console.error(
+        '======================================'
+      );
+
+      console.error(
+        'SPORT FIXTURES ERROR'
+      );
+
+      console.error(
+        err
+      );
+
+      console.error(
+        '======================================'
+      );
+
+
+      return res.status(
+        err.statusCode || 500
+      ).json({
+
+        success: false,
+
+        error:
+          err.message ||
+          'Failed to load sports fixtures',
+
+        details:
+          process.env.NODE_ENV === 'production'
+            ? undefined
+            : (
+                err.externalErrors ||
+                err.externalResponse ||
+                err.stack
+              )
+
+      });
+
     }
 
-    res.json(data);
-
-  } catch (err) {
-    console.error('SPORT FIXTURES ERROR:', err);
-
-    res.status(500).json({
-      success: false,
-      error: 'Failed to load sports fixtures',
-      details: err.message
-    });
   }
-});
+);
 
 
+
+// ======================================================
 // STANDINGS
-router.get('/sports/standings', async (req, res) => {
-  try {
-    const {
-      league,
-      season
-    } = req.query;
+// GET /api/sports/standings
+// ======================================================
 
-    if (!league || !season) {
-      return res.status(400).json({
-        success: false,
-        error: 'league and season are required'
-      });
-    }
+router.get(
+  '/sports/standings',
+  async (req, res) => {
 
-    const apiKey = getSportsApiKey();
+    try {
 
-    if (!apiKey) {
-      return res.status(500).json({
-        success: false,
-        error: 'Football API key is not configured'
-      });
-    }
+      const {
+        league,
+        season,
+        team
+      } = req.query;
 
-    const params = new URLSearchParams({
-      league: String(league),
-      season: String(season)
-    });
 
-    const response = await fetch(
-      `${SPORTS_API_BASE}/standings?${params.toString()}`,
-      {
-        headers: {
-          'x-apisports-key': apiKey
-        }
+      if (!league || !season) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          error:
+            'league and season are required'
+
+        });
+
       }
-    );
 
-    const data = await response.json();
 
-    if (!response.ok) {
-      return res.status(response.status).json({
-        success: false,
-        error: data?.message || 'Football API error',
-        response: data
+      const params = {
+        league,
+        season
+      };
+
+
+      if (team) {
+
+        params.team = team;
+
+      }
+
+
+      const data =
+        await callFootballAPI(
+          'standings',
+          params
+        );
+
+
+      return res.status(200).json({
+
+        success: true,
+
+        results:
+          data.results || 0,
+
+        response:
+          Array.isArray(data.response)
+            ? data.response
+            : [],
+
+        paging:
+          data.paging || null,
+
+        errors:
+          data.errors || {}
+
       });
+
+
+    } catch (err) {
+
+      console.error(
+        'SPORT STANDINGS ERROR:',
+        err
+      );
+
+
+      return res.status(
+        err.statusCode || 500
+      ).json({
+
+        success: false,
+
+        error:
+          err.message ||
+          'Failed to load standings',
+
+        details:
+          process.env.NODE_ENV === 'production'
+            ? undefined
+            : (
+                err.externalErrors ||
+                err.externalResponse ||
+                err.stack
+              )
+
+      });
+
     }
 
-    res.json(data);
-
-  } catch (err) {
-    console.error('SPORT STANDINGS ERROR:', err);
-
-    res.status(500).json({
-      success: false,
-      error: 'Failed to load standings',
-      details: err.message
-    });
   }
-});
+);
 
 
+
+// ======================================================
 // TOP SCORERS
-router.get('/sports/topscorers', async (req, res) => {
-  try {
-    const {
-      league,
-      season
-    } = req.query;
+// GET /api/sports/topscorers
+// ======================================================
 
-    if (!league || !season) {
-      return res.status(400).json({
-        success: false,
-        error: 'league and season are required'
-      });
-    }
+router.get(
+  '/sports/topscorers',
+  async (req, res) => {
 
-    const apiKey = getSportsApiKey();
+    try {
 
-    if (!apiKey) {
-      return res.status(500).json({
-        success: false,
-        error: 'Football API key is not configured'
-      });
-    }
+      const {
+        league,
+        season
+      } = req.query;
 
-    const params = new URLSearchParams({
-      league: String(league),
-      season: String(season)
-    });
 
-    const response = await fetch(
-      `${SPORTS_API_BASE}/players/topscorers?${params.toString()}`,
-      {
-        headers: {
-          'x-apisports-key': apiKey
-        }
+      if (!league || !season) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          error:
+            'league and season are required'
+
+        });
+
       }
-    );
 
-    const data = await response.json();
 
-    if (!response.ok) {
-      return res.status(response.status).json({
-        success: false,
-        error: data?.message || 'Football API error',
-        response: data
+      const data =
+        await callFootballAPI(
+          'players/topscorers',
+          {
+            league,
+            season
+          }
+        );
+
+
+      return res.status(200).json({
+
+        success: true,
+
+        results:
+          data.results || 0,
+
+        response:
+          Array.isArray(data.response)
+            ? data.response
+            : [],
+
+        paging:
+          data.paging || null,
+
+        errors:
+          data.errors || {}
+
       });
+
+
+    } catch (err) {
+
+      console.error(
+        'SPORT TOP SCORERS ERROR:',
+        err
+      );
+
+
+      return res.status(
+        err.statusCode || 500
+      ).json({
+
+        success: false,
+
+        error:
+          err.message ||
+          'Failed to load top scorers',
+
+        details:
+          process.env.NODE_ENV === 'production'
+            ? undefined
+            : (
+                err.externalErrors ||
+                err.externalResponse ||
+                err.stack
+              )
+
+      });
+
     }
 
-    res.json(data);
-
-  } catch (err) {
-    console.error('SPORT TOP SCORERS ERROR:', err);
-
-    res.status(500).json({
-      success: false,
-      error: 'Failed to load top scorers',
-      details: err.message
-    });
   }
-});
+);
 router.get('/authors/:id/stories', async (req, res) => {
 
   try {
