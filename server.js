@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 
 const express = require('express');
@@ -26,15 +27,20 @@ const PORT = process.env.PORT || 5000;
 // URLs
 // =====================================================
 
-const FRONTEND_URL = 'https://mahokofridaynews.com';
-const WWW_FRONTEND_URL = 'https://www.mahokofridaynews.com';
-const OLD_FRONTEND_URL = 'https://mahokofridaynews.onrender.com';
+const FRONTEND_URL =
+  'https://mahokofridaynews.com';
+
+const WWW_FRONTEND_URL =
+  'https://www.mahokofridaynews.com';
+
+const OLD_FRONTEND_URL =
+  'https://mahokofridaynews.onrender.com';
 
 const BACKEND_URL =
   'https://mahokofridaynewsbackend.onrender.com';
 
 // =====================================================
-// API-FOOTBALL
+// API-FOOTBALL CONFIG
 // =====================================================
 
 const FOOTBALL_API_URL =
@@ -68,7 +74,10 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    console.log('Blocked by CORS:', origin);
+    console.log(
+      'Blocked by CORS:',
+      origin
+    );
 
     return callback(
       new Error('Not allowed by CORS')
@@ -96,10 +105,15 @@ const corsOptions = {
   ]
 };
 
-app.use(cors(corsOptions));
+app.use(
+  cors(corsOptions)
+);
 
 // Preflight
-app.options('*', cors(corsOptions));
+app.options(
+  '*',
+  cors(corsOptions)
+);
 
 // =====================================================
 // SECURITY
@@ -136,9 +150,11 @@ app.use(
 
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
+
   max: 300,
 
   standardHeaders: true,
+
   legacyHeaders: false,
 
   message: {
@@ -148,9 +164,11 @@ const apiLimiter = rateLimit({
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
+
   max: 10,
 
   standardHeaders: true,
+
   legacyHeaders: false,
 
   message: {
@@ -159,13 +177,19 @@ const loginLimiter = rateLimit({
   }
 });
 
-// Login protection
+// =====================================================
+// LOGIN RATE LIMIT
+// =====================================================
+
 app.use(
   '/api/auth/login',
   loginLimiter
 );
 
-// General API protection
+// =====================================================
+// GENERAL API RATE LIMIT
+// =====================================================
+
 app.use(
   '/api',
   apiLimiter
@@ -178,7 +202,10 @@ app.use(
 app.use(
   '/uploads',
   express.static(
-    path.join(__dirname, 'uploads')
+    path.join(
+      __dirname,
+      'uploads'
+    )
   )
 );
 
@@ -190,16 +217,28 @@ app.get(
   '/health',
   (req, res) => {
 
-    res.status(200).json({
+    return res.status(200).json({
+
       status: 'ok',
+
       service: 'MFN Backend',
+
       database: 'MongoDB',
+
       footballAPI:
         FOOTBALL_API_KEY
           ? 'configured'
           : 'not configured',
-      frontend: FRONTEND_URL,
-      time: new Date().toISOString()
+
+      frontend:
+        FRONTEND_URL,
+
+      backend:
+        BACKEND_URL,
+
+      time:
+        new Date().toISOString()
+
     });
 
   }
@@ -213,23 +252,57 @@ app.get(
   '/api',
   (req, res) => {
 
-    res.status(200).json({
+    return res.status(200).json({
 
       status: 'ok',
 
-      message: 'MFN API is running',
+      message:
+        'MFN API is running',
 
-      service: 'MFN Backend',
+      service:
+        'MFN Backend',
 
-      frontend: FRONTEND_URL,
+      frontend:
+        FRONTEND_URL,
 
-      backend: BACKEND_URL,
+      backend:
+        BACKEND_URL,
 
       endpoints: {
-        auth: '/api/auth',
-        stories: '/api/stories',
-        sports: '/api/sports',
-        uploads: '/uploads'
+
+        auth:
+          '/api/auth',
+
+        stories:
+          '/api/stories',
+
+        sports:
+          '/api/sports',
+
+        sportsStatus:
+          '/api/sports/status',
+
+        fixtures:
+          '/api/sports/fixtures',
+
+        live:
+          '/api/sports/live',
+
+        upcoming:
+          '/api/sports/upcoming',
+
+        leagues:
+          '/api/sports/leagues',
+
+        standings:
+          '/api/sports/standings',
+
+        topScorers:
+          '/api/sports/top-scorers',
+
+        uploads:
+          '/uploads'
+
       }
 
     });
@@ -238,20 +311,22 @@ app.get(
 );
 
 // =====================================================
-// SPORTS API CONFIG CHECK
+// SPORTS API CONFIG STATUS
 // =====================================================
 
 app.get(
   '/api/sports/status',
   (req, res) => {
 
-    res.status(200).json({
+    return res.status(200).json({
 
       success: true,
 
-      service: 'MFN Sports API',
+      service:
+        'MFN Sports API',
 
-      provider: 'API-Football',
+      provider:
+        'API-Football',
 
       configured:
         Boolean(FOOTBALL_API_KEY),
@@ -265,423 +340,51 @@ app.get(
 );
 
 // =====================================================
-// SPORTS API PROXY
+// SPORTS ROUTES
 // =====================================================
 //
-// Frontend will call:
+// All sports endpoints are handled by:
+// ./routes/sports.js
 //
+// Available:
+//
+// GET /api/sports
 // GET /api/sports/fixtures
+// GET /api/sports/live
+// GET /api/sports/upcoming
+// GET /api/sports/leagues
+// GET /api/sports/standings
+// GET /api/sports/top-scorers
 //
-// Backend calls API-Football:
-//
-// GET /fixtures
-//
-// The API key NEVER goes to the frontend.
 // =====================================================
 
-app.get(
-  '/api/sports/fixtures',
-  async (req, res) => {
-
-    try {
-
-      if (!FOOTBALL_API_KEY) {
-
-        return res.status(500).json({
-
-          success: false,
-
-          error:
-            'FOOTBALL_API_KEY is not configured on the server.'
-
-        });
-
-      }
-
-      const {
-        league,
-        season,
-        date,
-        from,
-        to,
-        status,
-        team,
-        ids
-      } = req.query;
-
-      const params = new URLSearchParams();
-
-      if (league) {
-        params.append('league', league);
-      }
-
-      if (season) {
-        params.append('season', season);
-      }
-
-      if (date) {
-        params.append('date', date);
-      }
-
-      if (from) {
-        params.append('from', from);
-      }
-
-      if (to) {
-        params.append('to', to);
-      }
-
-      if (status) {
-        params.append('status', status);
-      }
-
-      if (team) {
-        params.append('team', team);
-      }
-
-      if (ids) {
-        params.append('ids', ids);
-      }
-
-      const response = await fetch(
-        `${FOOTBALL_API_URL}/fixtures?${params.toString()}`,
-        {
-          method: 'GET',
-
-          headers: {
-            'x-apisports-key':
-              FOOTBALL_API_KEY,
-
-            Accept:
-              'application/json'
-          }
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-
-        return res.status(
-          response.status
-        ).json({
-
-          success: false,
-
-          error:
-            'API-Football request failed.',
-
-          details: data
-
-        });
-
-      }
-
-      return res.status(200).json({
-
-        success: true,
-
-        provider: 'API-Football',
-
-        results:
-          data.results || 0,
-
-        response:
-          data.response || [],
-
-        errors:
-          data.errors || []
-
-      });
-
-    } catch (error) {
-
-      console.error(
-        'SPORTS FIXTURES ERROR:',
-        error
-      );
-
-      return res.status(500).json({
-
-        success: false,
-
-        error:
-          'Unable to retrieve football fixtures.'
-
-      });
-
-    }
-
-  }
+app.use(
+  '/api/sports',
+  require('./routes/sports')
 );
 
 // =====================================================
-// SPORTS LEAGUES
+// AUTHENTICATION ROUTES
 // =====================================================
 
-app.get(
-  '/api/sports/leagues',
-  async (req, res) => {
-
-    try {
-
-      if (!FOOTBALL_API_KEY) {
-
-        return res.status(500).json({
-
-          success: false,
-
-          error:
-            'FOOTBALL_API_KEY is not configured.'
-
-        });
-
-      }
-
-      const {
-        id,
-        season,
-        country
-      } = req.query;
-
-      const params = new URLSearchParams();
-
-      if (id) {
-        params.append('id', id);
-      }
-
-      if (season) {
-        params.append('season', season);
-      }
-
-      if (country) {
-        params.append('country', country);
-      }
-
-      const response = await fetch(
-        `${FOOTBALL_API_URL}/leagues?${params.toString()}`,
-        {
-          method: 'GET',
-
-          headers: {
-            'x-apisports-key':
-              FOOTBALL_API_KEY,
-
-            Accept:
-              'application/json'
-          }
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-
-        return res.status(
-          response.status
-        ).json({
-
-          success: false,
-
-          error:
-            'API-Football leagues request failed.',
-
-          details: data
-
-        });
-
-      }
-
-      return res.status(200).json({
-
-        success: true,
-
-        results:
-          data.results || 0,
-
-        response:
-          data.response || [],
-
-        errors:
-          data.errors || []
-
-      });
-
-    } catch (error) {
-
-      console.error(
-        'SPORTS LEAGUES ERROR:',
-        error
-      );
-
-      return res.status(500).json({
-
-        success: false,
-
-        error:
-          'Unable to retrieve football leagues.'
-
-      });
-
-    }
-
-  }
-);
-
-// =====================================================
-// SPORTS STANDINGS
-// =====================================================
-
-app.get(
-  '/api/sports/standings',
-  async (req, res) => {
-
-    try {
-
-      if (!FOOTBALL_API_KEY) {
-
-        return res.status(500).json({
-
-          success: false,
-
-          error:
-            'FOOTBALL_API_KEY is not configured.'
-
-        });
-
-      }
-
-      const {
-        league,
-        season,
-        team
-      } = req.query;
-
-      if (!league || !season) {
-
-        return res.status(400).json({
-
-          success: false,
-
-          error:
-            'league and season are required.'
-
-        });
-
-      }
-
-      const params =
-        new URLSearchParams();
-
-      params.append(
-        'league',
-        league
-      );
-
-      params.append(
-        'season',
-        season
-      );
-
-      if (team) {
-
-        params.append(
-          'team',
-          team
-        );
-
-      }
-
-      const response = await fetch(
-        `${FOOTBALL_API_URL}/standings?${params.toString()}`,
-        {
-          method: 'GET',
-
-          headers: {
-
-            'x-apisports-key':
-              FOOTBALL_API_KEY,
-
-            Accept:
-              'application/json'
-
-          }
-        }
-      );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-
-        return res.status(
-          response.status
-        ).json({
-
-          success: false,
-
-          error:
-            'API-Football standings request failed.',
-
-          details: data
-
-        });
-
-      }
-
-      return res.status(200).json({
-
-        success: true,
-
-        results:
-          data.results || 0,
-
-        response:
-          data.response || [],
-
-        errors:
-          data.errors || []
-
-      });
-
-    } catch (error) {
-
-      console.error(
-        'SPORTS STANDINGS ERROR:',
-        error
-      );
-
-      return res.status(500).json({
-
-        success: false,
-
-        error:
-          'Unable to retrieve standings.'
-
-      });
-
-    }
-
-  }
-);
-
-// =====================================================
-// API ROUTES
-// =====================================================
-
-// Authentication
 app.use(
   '/api/auth',
   require('./routes/auth')
 );
 
-// Stories
+// =====================================================
+// STORIES ROUTES
+// =====================================================
+
 app.use(
   '/api/stories',
   require('./routes/stories')
 );
 
-// Other API routes
+// =====================================================
+// OTHER API ROUTES
+// =====================================================
+
 app.use(
   '/api',
   require('./routes/api')
@@ -692,13 +395,15 @@ console.log(
 );
 
 // =====================================================
-// 404
+// 404 HANDLER
 // =====================================================
 
 app.use(
   (req, res) => {
 
-    res.status(404).json({
+    return res.status(404).json({
+
+      success: false,
 
       error:
         'Route not found',
@@ -712,7 +417,7 @@ app.use(
 );
 
 // =====================================================
-// ERROR HANDLER
+// GLOBAL ERROR HANDLER
 // =====================================================
 
 app.use(
@@ -723,13 +428,18 @@ app.use(
       err.stack || err
     );
 
-    // CORS error
+    // -----------------------------------------------
+    // CORS ERROR
+    // -----------------------------------------------
+
     if (
       err.message ===
       'Not allowed by CORS'
     ) {
 
       return res.status(403).json({
+
+        success: false,
 
         error:
           'CORS origin not allowed'
@@ -738,7 +448,13 @@ app.use(
 
     }
 
-    res.status(500).json({
+    // -----------------------------------------------
+    // DEFAULT ERROR
+    // -----------------------------------------------
+
+    return res.status(500).json({
+
+      success: false,
 
       error:
         process.env.NODE_ENV ===
@@ -765,6 +481,10 @@ const start = async () => {
       'Starting MFN Backend...'
     );
 
+    // -----------------------------------------------
+    // DATABASE
+    // -----------------------------------------------
+
     console.log(
       'Connecting to MongoDB...'
     );
@@ -775,19 +495,30 @@ const start = async () => {
       'MongoDB connected successfully'
     );
 
+    // -----------------------------------------------
+    // FOOTBALL API
+    // -----------------------------------------------
+
     console.log(
       `Football API:
-       ${
-         FOOTBALL_API_KEY
-           ? 'configured'
-           : 'NOT CONFIGURED'
-       }`
+${FOOTBALL_API_KEY
+  ? 'configured'
+  : 'NOT CONFIGURED'}`
     );
+
+    // -----------------------------------------------
+    // SERVER
+    // -----------------------------------------------
 
     app.listen(
       PORT,
       '0.0.0.0',
       () => {
+
+        console.log('');
+        console.log(
+          '=========================================='
+        );
 
         console.log(
           `🚀 MFN Backend running on port ${PORT}`
@@ -806,13 +537,27 @@ const start = async () => {
         );
 
         console.log(
-          `⚽ Sports:
-           ${BACKEND_URL}/api/sports`
+          `⚽ Sports: ${BACKEND_URL}/api/sports`
         );
 
         console.log(
-          `❤️ Health:
-           ${BACKEND_URL}/health`
+          `❤️ Health: ${BACKEND_URL}/health`
+        );
+
+        console.log(
+          `🏆 Standings: ${BACKEND_URL}/api/sports/standings`
+        );
+
+        console.log(
+          `🥅 Top Scorers: ${BACKEND_URL}/api/sports/top-scorers`
+        );
+
+        console.log(
+          `🔴 Live: ${BACKEND_URL}/api/sports/live`
+        );
+
+        console.log(
+          '=========================================='
         );
 
       }
@@ -836,3 +581,4 @@ const start = async () => {
 // =====================================================
 
 start();
+
