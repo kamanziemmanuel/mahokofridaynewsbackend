@@ -1,14 +1,53 @@
 
 // =====================================================
 // MFN SPORTS SERVICE
-// API-FOOTBALL
+// BIG BALLS SPORTS DATA
 // =====================================================
 
-const FOOTBALL_API_URL =
-  'https://v3.football.api-sports.io';
+const BBS_API_URL =
+  'https://api.bigballsdata.com/v1';
 
-const FOOTBALL_API_KEY =
-  process.env.FOOTBALL_API_KEY;
+const BBS_API_KEY =
+  process.env.BBS_API_KEY;
+
+// =====================================================
+// LEAGUE CONFIGURATION
+// =====================================================
+
+const LEAGUES = {
+  epl: {
+    code: 'epl',
+    name: 'Premier League'
+  },
+
+  laLiga: {
+    code: 'laliga',
+    name: 'La Liga'
+  },
+
+  serieA: {
+    code: 'seriea',
+    name: 'Serie A'
+  },
+
+  bundesliga: {
+    code: 'bundesliga',
+    name: 'Bundesliga'
+  },
+
+  championsLeague: {
+    code: 'ucl',
+    name: 'UEFA Champions League'
+  }
+};
+
+const DEFAULT_LEAGUES = [
+  'epl',
+  'laliga',
+  'seriea',
+  'bundesliga',
+  'ucl'
+];
 
 // =====================================================
 // BASE REQUEST
@@ -19,15 +58,15 @@ const footballRequest = async (
   params = {}
 ) => {
 
-  if (!FOOTBALL_API_KEY) {
+  if (!BBS_API_KEY) {
 
     const error =
       new Error(
-        'FOOTBALL_API_KEY is not configured.'
+        'BBS_API_KEY is not configured.'
       );
 
     error.code =
-      'FOOTBALL_API_NOT_CONFIGURED';
+      'BBS_API_NOT_CONFIGURED';
 
     error.status =
       503;
@@ -62,8 +101,8 @@ const footballRequest = async (
 
   const url =
     queryString
-      ? `${FOOTBALL_API_URL}/${endpoint}?${queryString}`
-      : `${FOOTBALL_API_URL}/${endpoint}`;
+      ? `${BBS_API_URL}/${endpoint}?${queryString}`
+      : `${BBS_API_URL}/${endpoint}`;
 
   let response;
 
@@ -76,11 +115,13 @@ const footballRequest = async (
           method: 'GET',
 
           headers: {
-            'x-apisports-key':
-              FOOTBALL_API_KEY,
+
+            Authorization:
+              `Bearer ${BBS_API_KEY}`,
 
             Accept:
               'application/json'
+
           }
         }
       );
@@ -89,11 +130,11 @@ const footballRequest = async (
 
     const error =
       new Error(
-        'Unable to connect to API-Football.'
+        'Unable to connect to Big Balls Sports Data.'
       );
 
     error.code =
-      'FOOTBALL_API_NETWORK_ERROR';
+      'BBS_NETWORK_ERROR';
 
     error.status =
       503;
@@ -115,11 +156,11 @@ const footballRequest = async (
 
     const error =
       new Error(
-        'API-Football returned an invalid response.'
+        'Big Balls Sports Data returned an invalid response.'
       );
 
     error.code =
-      'FOOTBALL_API_INVALID_RESPONSE';
+      'BBS_INVALID_RESPONSE';
 
     error.status =
       502;
@@ -138,8 +179,13 @@ const footballRequest = async (
 
     const error =
       new Error(
-        'API-Football request failed.'
+        data?.error ||
+        data?.message ||
+        'Big Balls Sports Data request failed.'
       );
+
+    error.code =
+      'BBS_HTTP_ERROR';
 
     error.status =
       response.status;
@@ -151,37 +197,30 @@ const footballRequest = async (
   }
 
   // ---------------------------------------------------
-  // API-FOOTBALL ACCESS ERROR
+  // API ERROR
   // ---------------------------------------------------
 
   if (
     data &&
-    data.errors &&
-    Object.keys(data.errors).length > 0
+    data.error
   ) {
 
-    const accessError =
-      data.errors.access;
+    const error =
+      new Error(
+        data.error.message ||
+        data.error
+      );
 
-    if (accessError) {
+    error.code =
+      'BBS_API_ERROR';
 
-      const error =
-        new Error(
-          accessError
-        );
+    error.status =
+      502;
 
-      error.code =
-        'FOOTBALL_API_ACCESS_ERROR';
+    error.details =
+      data;
 
-      error.status =
-        403;
-
-      error.details =
-        data.errors;
-
-      throw error;
-    }
-
+    throw error;
   }
 
   return data;
@@ -189,10 +228,6 @@ const footballRequest = async (
 
 // =====================================================
 // SAFE REQUEST
-// =====================================================
-//
-// This wrapper prevents one failed API request from
-// breaking the complete sports package.
 // =====================================================
 
 const safeFootballRequest = async (
@@ -222,7 +257,7 @@ const safeFootballRequest = async (
   } catch (error) {
 
     console.error(
-      `API-FOOTBALL ERROR [${endpoint}]:`,
+      `BIGBALLS ERROR [${endpoint}]:`,
       error.message
     );
 
@@ -234,11 +269,14 @@ const safeFootballRequest = async (
 
         results: 0,
 
-        response: fallback,
+        response:
+          fallback,
 
         errors: {
+
           access:
             error.message
+
         }
 
       },
@@ -260,9 +298,7 @@ const safeFootballRequest = async (
       }
 
     };
-
   }
-
 };
 
 // =====================================================
@@ -274,8 +310,11 @@ const getFixtures = async (
 ) => {
 
   return footballRequest(
-    'fixtures',
-    params
+    'matches',
+    {
+      sport: 'football',
+      ...params
+    }
   );
 
 };
@@ -290,7 +329,10 @@ const getLeagues = async (
 
   return footballRequest(
     'leagues',
-    params
+    {
+      sport: 'football',
+      ...params
+    }
   );
 
 };
@@ -300,29 +342,23 @@ const getLeagues = async (
 // =====================================================
 
 const getStandings = async (
-  league,
-  season,
-  team
+  league
 ) => {
 
-  const params = {
+  if (!league) {
 
-    league,
-
-    season
-
-  };
-
-  if (team) {
-
-    params.team =
-      team;
+    throw new Error(
+      'league is required.'
+    );
 
   }
 
   return footballRequest(
     'standings',
-    params
+    {
+      sport: 'football',
+      league
+    }
   );
 
 };
@@ -332,23 +368,23 @@ const getStandings = async (
 // =====================================================
 
 const getTopScorers = async (
-  league,
-  season
+  league
 ) => {
 
-  if (!league || !season) {
+  if (!league) {
 
     throw new Error(
-      'league and season are required.'
+      'league is required.'
     );
 
   }
 
   return footballRequest(
-    'players/topscorers',
+    'players/stats',
     {
+      sport: 'football',
       league,
-      season
+      sort: 'goals'
     }
   );
 
@@ -361,9 +397,10 @@ const getTopScorers = async (
 const getLiveFixtures = async () => {
 
   return footballRequest(
-    'fixtures',
+    'matches',
     {
-      live: 'all'
+      sport: 'football',
+      status: 'live'
     }
   );
 
@@ -375,13 +412,16 @@ const getLiveFixtures = async () => {
 
 const getUpcomingFixtures = async (
   league,
-  season,
-  next = 20
+  limit = 20
 ) => {
 
   const params = {
 
-    next
+    sport: 'football',
+
+    status: 'scheduled',
+
+    limit
 
   };
 
@@ -392,18 +432,70 @@ const getUpcomingFixtures = async (
 
   }
 
-  if (season) {
-
-    params.season =
-      season;
-
-  }
-
   return footballRequest(
-    'fixtures',
+    'matches',
     params
   );
 
+};
+
+// =====================================================
+// NORMALIZE RESPONSE
+// =====================================================
+
+const extractArray = (
+  result
+) => {
+
+  if (
+    !result ||
+    !result.data
+  ) {
+    return [];
+  }
+
+  const data =
+    result.data;
+
+  if (
+    Array.isArray(data)
+  ) {
+    return data;
+  }
+
+  if (
+    Array.isArray(
+      data.data
+    )
+  ) {
+    return data.data;
+  }
+
+  if (
+    Array.isArray(
+      data.response
+    )
+  ) {
+    return data.response;
+  }
+
+  if (
+    Array.isArray(
+      data.matches
+    )
+  ) {
+    return data.matches;
+  }
+
+  if (
+    Array.isArray(
+      data.results
+    )
+  ) {
+    return data.results;
+  }
+
+  return [];
 };
 
 // =====================================================
@@ -411,7 +503,7 @@ const getUpcomingFixtures = async (
 // =====================================================
 // GET /api/sports/updates
 //
-// Returns one complete package:
+// Returns:
 //
 // live
 // fixtures
@@ -422,12 +514,11 @@ const getUpcomingFixtures = async (
 // =====================================================
 
 const getSportsUpdates = async ({
-  leagues = [],
-  season = new Date().getFullYear()
+  leagues = DEFAULT_LEAGUES
 } = {}) => {
 
   // ---------------------------------------------------
-  // DEFAULT LEAGUES
+  // SELECT LEAGUES
   // ---------------------------------------------------
 
   const selectedLeagues =
@@ -436,14 +527,7 @@ const getSportsUpdates = async ({
 
       ? leagues
 
-      : [
-          39,   // Premier League
-          140,  // La Liga
-          135,  // Serie A
-          78,   // Bundesliga
-          61,   // Ligue 1
-          2     // UEFA Champions League
-        ];
+      : DEFAULT_LEAGUES;
 
   // ---------------------------------------------------
   // LIVE
@@ -451,21 +535,24 @@ const getSportsUpdates = async ({
 
   const livePromise =
     safeFootballRequest(
-      'fixtures',
+      'matches',
       {
-        live: 'all'
+        sport: 'football',
+        status: 'live'
       }
     );
 
   // ---------------------------------------------------
-  // UPCOMING FIXTURES
+  // UPCOMING
   // ---------------------------------------------------
 
   const upcomingPromise =
     safeFootballRequest(
-      'fixtures',
+      'matches',
       {
-        next: 20
+        sport: 'football',
+        status: 'scheduled',
+        limit: 20
       }
     );
 
@@ -477,7 +564,7 @@ const getSportsUpdates = async ({
     safeFootballRequest(
       'leagues',
       {
-        season
+        sport: 'football'
       }
     );
 
@@ -493,8 +580,8 @@ const getSportsUpdates = async ({
           await safeFootballRequest(
             'standings',
             {
-              league,
-              season
+              sport: 'football',
+              league
             }
           );
 
@@ -519,10 +606,11 @@ const getSportsUpdates = async ({
 
         const result =
           await safeFootballRequest(
-            'players/topscorers',
+            'players/stats',
             {
+              sport: 'football',
               league,
-              season
+              sort: 'goals'
             }
           );
 
@@ -538,7 +626,7 @@ const getSportsUpdates = async ({
     );
 
   // ---------------------------------------------------
-  // WAIT FOR EVERYTHING
+  // WAIT
   // ---------------------------------------------------
 
   const [
@@ -566,28 +654,34 @@ const getSportsUpdates = async ({
   ]);
 
   // ---------------------------------------------------
-  // EXTRACT LIVE
+  // LIVE DATA
   // ---------------------------------------------------
 
   const liveData =
-    liveResult.data || {};
+    extractArray(
+      liveResult
+    );
 
   // ---------------------------------------------------
-  // EXTRACT UPCOMING
+  // FIXTURES DATA
   // ---------------------------------------------------
 
-  const upcomingData =
-    upcomingResult.data || {};
+  const fixturesData =
+    extractArray(
+      upcomingResult
+    );
 
   // ---------------------------------------------------
-  // EXTRACT LEAGUES
+  // LEAGUES DATA
   // ---------------------------------------------------
 
   const leaguesData =
-    leaguesResult.data || {};
+    extractArray(
+      leaguesResult
+    );
 
   // ---------------------------------------------------
-  // NORMALIZE STANDINGS
+  // STANDINGS
   // ---------------------------------------------------
 
   const standings = [];
@@ -597,13 +691,14 @@ const getSportsUpdates = async ({
   standingsData.forEach(
     (item) => {
 
+      const data =
+        extractArray(
+          item
+        );
+
       if (
         item.success &&
-        item.data &&
-        Array.isArray(
-          item.data.response
-        ) &&
-        item.data.response.length > 0
+        data.length > 0
       ) {
 
         standings.push({
@@ -611,8 +706,19 @@ const getSportsUpdates = async ({
           leagueId:
             item.league,
 
-          data:
-            item.data.response
+          leagueName:
+            LEAGUES[
+              Object.keys(
+                LEAGUES
+              ).find(
+                key =>
+                  LEAGUES[key].code ===
+                  item.league
+              )
+            ]?.name ||
+            item.league,
+
+          data
 
         });
 
@@ -645,7 +751,7 @@ const getSportsUpdates = async ({
   );
 
   // ---------------------------------------------------
-  // NORMALIZE TOP SCORERS
+  // TOP SCORERS
   // ---------------------------------------------------
 
   const topScorers = [];
@@ -655,13 +761,14 @@ const getSportsUpdates = async ({
   topScorersData.forEach(
     (item) => {
 
+      const data =
+        extractArray(
+          item
+        );
+
       if (
         item.success &&
-        item.data &&
-        Array.isArray(
-          item.data.response
-        ) &&
-        item.data.response.length > 0
+        data.length > 0
       ) {
 
         topScorers.push({
@@ -669,8 +776,19 @@ const getSportsUpdates = async ({
           leagueId:
             item.league,
 
-          data:
-            item.data.response
+          leagueName:
+            LEAGUES[
+              Object.keys(
+                LEAGUES
+              ).find(
+                key =>
+                  LEAGUES[key].code ===
+                  item.league
+              )
+            ]?.name ||
+            item.league,
+
+          data
 
         });
 
@@ -703,7 +821,7 @@ const getSportsUpdates = async ({
   );
 
   // ---------------------------------------------------
-  // BUILD ERRORS
+  // ERRORS
   // ---------------------------------------------------
 
   const errors = {
@@ -726,20 +844,26 @@ const getSportsUpdates = async ({
   };
 
   // ---------------------------------------------------
-  // DETECT PROVIDER FAILURE
+  // PROVIDER STATUS
   // ---------------------------------------------------
 
   const hasProviderError =
     Boolean(
+
       liveResult.error ||
+
       upcomingResult.error ||
+
       leaguesResult.error ||
+
       standingsErrors.length > 0 ||
+
       topScorersErrors.length > 0
+
     );
 
   // ---------------------------------------------------
-  // RETURN COMPLETE PACKAGE
+  // RETURN
   // ---------------------------------------------------
 
   return {
@@ -748,12 +872,10 @@ const getSportsUpdates = async ({
       true,
 
     provider:
-      'API-Football',
+      'Big Balls Sports Data',
 
     providerAvailable:
       !hasProviderError,
-
-    season,
 
     selectedLeagues,
 
@@ -763,42 +885,30 @@ const getSportsUpdates = async ({
     live: {
 
       results:
-        liveData.results || 0,
+        liveData.length,
 
       data:
-        Array.isArray(
-          liveData.response
-        )
-          ? liveData.response
-          : []
+        liveData
 
     },
 
     fixtures: {
 
       results:
-        upcomingData.results || 0,
+        fixturesData.length,
 
       data:
-        Array.isArray(
-          upcomingData.response
-        )
-          ? upcomingData.response
-          : []
+        fixturesData
 
     },
 
     leagues: {
 
       results:
-        leaguesData.results || 0,
+        leaguesData.length,
 
       data:
-        Array.isArray(
-          leaguesData.response
-        )
-          ? leaguesData.response
-          : []
+        leaguesData
 
     },
 
@@ -819,6 +929,8 @@ const getSportsUpdates = async ({
 module.exports = {
 
   footballRequest,
+
+  safeFootballRequest,
 
   getFixtures,
 
