@@ -3,57 +3,70 @@
 // MFN SPORTS SERVICE
 // BIG BALLS SPORTS DATA
 // =====================================================
+//
+// Provider:
+// https://bigballsdata.com
+//
+// API:
+// https://api.bigballsdata.com/v1
+//
+// Environment:
+// BBS_API_KEY=your_bigballs_api_key
+//
+// IMPORTANT:
+// Keep BBS_API_KEY only in the backend .env.
+// NEVER expose it in React/frontend.
+// =====================================================
 
 const BBS_API_URL =
+  process.env.BBS_API_URL ||
   'https://api.bigballsdata.com/v1';
 
 const BBS_API_KEY =
   process.env.BBS_API_KEY;
 
 // =====================================================
-// LEAGUE CONFIGURATION
+// DEFAULT FOOTBALL LEAGUES
 // =====================================================
-
-const LEAGUES = {
-  epl: {
-    code: 'epl',
-    name: 'Premier League'
-  },
-
-  laLiga: {
-    code: 'laliga',
-    name: 'La Liga'
-  },
-
-  serieA: {
-    code: 'seriea',
-    name: 'Serie A'
-  },
-
-  bundesliga: {
-    code: 'bundesliga',
-    name: 'Bundesliga'
-  },
-
-  championsLeague: {
-    code: 'ucl',
-    name: 'UEFA Champions League'
-  }
-};
+//
+// Big Balls league slugs:
+//
+// epl        = Premier League
+// laliga     = La Liga
+// serie-a    = Serie A
+// bundesliga = Bundesliga
+// ligue-1    = Ligue 1
+// cl         = UEFA Champions League
+//
+// =====================================================
 
 const DEFAULT_LEAGUES = [
   'epl',
   'laliga',
-  'seriea',
+  'serie-a',
   'bundesliga',
-  'ucl'
+  'ligue-1',
+  'cl'
 ];
+
+// =====================================================
+// LEAGUE NAMES
+// =====================================================
+
+const LEAGUE_NAMES = {
+  epl: 'Premier League',
+  laliga: 'La Liga',
+  'serie-a': 'Serie A',
+  bundesliga: 'Bundesliga',
+  'ligue-1': 'Ligue 1',
+  cl: 'UEFA Champions League'
+};
 
 // =====================================================
 // BASE REQUEST
 // =====================================================
 
-const footballRequest = async (
+const bigBallsRequest = async (
   endpoint,
   params = {}
 ) => {
@@ -90,9 +103,7 @@ const footballRequest = async (
           key,
           value
         );
-
       }
-
     }
   );
 
@@ -115,13 +126,11 @@ const footballRequest = async (
           method: 'GET',
 
           headers: {
-
             Authorization:
               `Bearer ${BBS_API_KEY}`,
 
             Accept:
               'application/json'
-
           }
         }
       );
@@ -177,15 +186,23 @@ const footballRequest = async (
 
   if (!response.ok) {
 
+    const apiError =
+      data?.error ||
+      data?.message ||
+      data?.errors ||
+      'Big Balls Sports Data request failed.';
+
     const error =
       new Error(
-        data?.error ||
-        data?.message ||
-        'Big Balls Sports Data request failed.'
+        typeof apiError === 'string'
+          ? apiError
+          : 'Big Balls Sports Data request failed.'
       );
 
     error.code =
-      'BBS_HTTP_ERROR';
+      data?.code ||
+      data?.error_code ||
+      'BBS_API_ERROR';
 
     error.status =
       response.status;
@@ -197,24 +214,28 @@ const footballRequest = async (
   }
 
   // ---------------------------------------------------
-  // API ERROR
+  // API ERROR ENVELOPE
   // ---------------------------------------------------
 
   if (
     data &&
-    data.error
+    data.error &&
+    !data.data
   ) {
 
     const error =
       new Error(
-        data.error.message ||
-        data.error
+        typeof data.error === 'string'
+          ? data.error
+          : 'Big Balls Sports Data returned an API error.'
       );
 
     error.code =
+      data.code ||
       'BBS_API_ERROR';
 
     error.status =
+      data.status ||
       502;
 
     error.details =
@@ -229,8 +250,13 @@ const footballRequest = async (
 // =====================================================
 // SAFE REQUEST
 // =====================================================
+//
+// Prevents one failed endpoint from breaking the
+// complete /api/sports/updates package.
+//
+// =====================================================
 
-const safeFootballRequest = async (
+const safeBigBallsRequest = async (
   endpoint,
   params = {},
   fallback = []
@@ -239,7 +265,7 @@ const safeFootballRequest = async (
   try {
 
     const data =
-      await footballRequest(
+      await bigBallsRequest(
         endpoint,
         params
       );
@@ -267,17 +293,9 @@ const safeFootballRequest = async (
 
       data: {
 
-        results: 0,
+        data: fallback,
 
-        response:
-          fallback,
-
-        errors: {
-
-          access:
-            error.message
-
-        }
+        meta: {}
 
       },
 
@@ -287,13 +305,16 @@ const safeFootballRequest = async (
           error.message,
 
         code:
-          error.code || null,
+          error.code ||
+          null,
 
         status:
-          error.status || 500,
+          error.status ||
+          500,
 
         details:
-          error.details || null
+          error.details ||
+          null
 
       }
 
@@ -302,148 +323,21 @@ const safeFootballRequest = async (
 };
 
 // =====================================================
-// FIXTURES
+// NORMALIZE RESPONSE DATA
+// =====================================================
+//
+// Big Balls normally returns:
+//
+// {
+//   data: [...],
+//   meta: {...}
+// }
+//
+// Some endpoints may return an object inside data.
+//
 // =====================================================
 
-const getFixtures = async (
-  params = {}
-) => {
-
-  return footballRequest(
-    'matches',
-    {
-      sport: 'football',
-      ...params
-    }
-  );
-
-};
-
-// =====================================================
-// LEAGUES
-// =====================================================
-
-const getLeagues = async (
-  params = {}
-) => {
-
-  return footballRequest(
-    'leagues',
-    {
-      sport: 'football',
-      ...params
-    }
-  );
-
-};
-
-// =====================================================
-// STANDINGS
-// =====================================================
-
-const getStandings = async (
-  league
-) => {
-
-  if (!league) {
-
-    throw new Error(
-      'league is required.'
-    );
-
-  }
-
-  return footballRequest(
-    'standings',
-    {
-      sport: 'football',
-      league
-    }
-  );
-
-};
-
-// =====================================================
-// TOP SCORERS
-// =====================================================
-
-const getTopScorers = async (
-  league
-) => {
-
-  if (!league) {
-
-    throw new Error(
-      'league is required.'
-    );
-
-  }
-
-  return footballRequest(
-    'players/stats',
-    {
-      sport: 'football',
-      league,
-      sort: 'goals'
-    }
-  );
-
-};
-
-// =====================================================
-// LIVE FIXTURES
-// =====================================================
-
-const getLiveFixtures = async () => {
-
-  return footballRequest(
-    'matches',
-    {
-      sport: 'football',
-      status: 'live'
-    }
-  );
-
-};
-
-// =====================================================
-// UPCOMING FIXTURES
-// =====================================================
-
-const getUpcomingFixtures = async (
-  league,
-  limit = 20
-) => {
-
-  const params = {
-
-    sport: 'football',
-
-    status: 'scheduled',
-
-    limit
-
-  };
-
-  if (league) {
-
-    params.league =
-      league;
-
-  }
-
-  return footballRequest(
-    'matches',
-    params
-  );
-
-};
-
-// =====================================================
-// NORMALIZE RESPONSE
-// =====================================================
-
-const extractArray = (
+const extractDataArray = (
   result
 ) => {
 
@@ -451,56 +345,256 @@ const extractArray = (
     !result ||
     !result.data
   ) {
+
     return [];
   }
 
-  const data =
-    result.data;
-
   if (
-    Array.isArray(data)
+    Array.isArray(
+      result.data.data
+    )
   ) {
-    return data;
+
+    return result.data.data;
   }
 
   if (
     Array.isArray(
-      data.data
+      result.data
     )
   ) {
-    return data.data;
-  }
 
-  if (
-    Array.isArray(
-      data.response
-    )
-  ) {
-    return data.response;
-  }
-
-  if (
-    Array.isArray(
-      data.matches
-    )
-  ) {
-    return data.matches;
-  }
-
-  if (
-    Array.isArray(
-      data.results
-    )
-  ) {
-    return data.results;
+    return result.data;
   }
 
   return [];
 };
 
 // =====================================================
+// FIXTURES / MATCHES
+// =====================================================
+//
+// Big Balls:
+//
+// GET /v1/matches
+//
+// Examples:
+//
+// ?sport=football
+// ?sport=football&league=epl
+// ?sport=football&status=live
+//
+// =====================================================
+
+const getFixtures = async (
+  params = {}
+) => {
+
+  const requestParams = {
+
+    sport:
+      'football',
+
+    ...params
+
+  };
+
+  return bigBallsRequest(
+    'matches',
+    requestParams
+  );
+};
+
+// =====================================================
+// LEAGUES
+// =====================================================
+//
+// GET /v1/leagues?sport=football
+//
+// =====================================================
+
+const getLeagues = async (
+  params = {}
+) => {
+
+  return bigBallsRequest(
+    'leagues',
+    {
+      sport:
+        'football',
+
+      ...params
+    }
+  );
+};
+
+// =====================================================
+// STANDINGS
+// =====================================================
+//
+// GET /v1/standings
+//
+// Required:
+//
+// sport=football
+// league=epl
+//
+// =====================================================
+
+const getStandings = async (
+  league,
+  season
+) => {
+
+  if (!league) {
+
+    throw new Error(
+      'league is required.'
+    );
+  }
+
+  const params = {
+
+    sport:
+      'football',
+
+    league
+
+  };
+
+  if (season) {
+
+    params.season =
+      season;
+  }
+
+  return bigBallsRequest(
+    'standings',
+    params
+  );
+};
+
+// =====================================================
+// TOP SCORERS
+// =====================================================
+//
+// Big Balls:
+//
+// GET /v1/leagues/:id/top-scorers
+//
+// Example:
+//
+// /v1/leagues/epl/top-scorers
+//
+// =====================================================
+
+const getTopScorers = async (
+  league,
+  season,
+  limit = 20
+) => {
+
+  if (!league) {
+
+    throw new Error(
+      'league is required.'
+    );
+  }
+
+  const params = {
+
+    limit
+
+  };
+
+  if (season) {
+
+    params.season =
+      season;
+  }
+
+  return bigBallsRequest(
+    `leagues/${encodeURIComponent(
+      league
+    )}/top-scorers`,
+    params
+  );
+};
+
+// =====================================================
+// LIVE FIXTURES
+// =====================================================
+//
+// GET /v1/matches?sport=football&status=live
+//
+// =====================================================
+
+const getLiveFixtures = async () => {
+
+  return bigBallsRequest(
+    'matches',
+    {
+
+      sport:
+        'football',
+
+      status:
+        'live'
+
+    }
+  );
+};
+
+// =====================================================
+// UPCOMING FIXTURES
+// =====================================================
+//
+// Big Balls supports match list filtering.
+// We use status=upcoming.
+//
+// =====================================================
+
+const getUpcomingFixtures = async (
+  league,
+  season,
+  next = 20
+) => {
+
+  const params = {
+
+    sport:
+      'football',
+
+    status:
+      'upcoming',
+
+    limit:
+      next
+
+  };
+
+  if (league) {
+
+    params.league =
+      league;
+  }
+
+  if (season) {
+
+    params.season =
+      season;
+  }
+
+  return bigBallsRequest(
+    'matches',
+    params
+  );
+};
+
+// =====================================================
 // SPORTS UPDATES PACKAGE
 // =====================================================
+//
 // GET /api/sports/updates
 //
 // Returns:
@@ -511,10 +605,12 @@ const extractArray = (
 // standings
 // topScorers
 // errors
+//
 // =====================================================
 
 const getSportsUpdates = async ({
-  leagues = DEFAULT_LEAGUES
+  leagues = [],
+  season
 } = {}) => {
 
   // ---------------------------------------------------
@@ -530,15 +626,34 @@ const getSportsUpdates = async ({
       : DEFAULT_LEAGUES;
 
   // ---------------------------------------------------
+  // CURRENT SEASON
+  // ---------------------------------------------------
+  //
+  // Big Balls supports season filtering for many
+  // stored league endpoints.
+  //
+  // We intentionally do not force a season on the
+  // generic match list unless the caller provides one.
+  //
+  // This prevents the frontend from receiving empty
+  // data when the provider's current-season default
+  // is more appropriate.
+  //
+  // ---------------------------------------------------
+
+  // ---------------------------------------------------
   // LIVE
   // ---------------------------------------------------
 
   const livePromise =
-    safeFootballRequest(
+    safeBigBallsRequest(
       'matches',
       {
-        sport: 'football',
-        status: 'live'
+        sport:
+          'football',
+
+        status:
+          'live'
       }
     );
 
@@ -547,12 +662,17 @@ const getSportsUpdates = async ({
   // ---------------------------------------------------
 
   const upcomingPromise =
-    safeFootballRequest(
+    safeBigBallsRequest(
       'matches',
       {
-        sport: 'football',
-        status: 'scheduled',
-        limit: 20
+        sport:
+          'football',
+
+        status:
+          'upcoming',
+
+        limit:
+          20
       }
     );
 
@@ -561,10 +681,11 @@ const getSportsUpdates = async ({
   // ---------------------------------------------------
 
   const leaguesPromise =
-    safeFootballRequest(
+    safeBigBallsRequest(
       'leagues',
       {
-        sport: 'football'
+        sport:
+          'football'
       }
     );
 
@@ -577,11 +698,17 @@ const getSportsUpdates = async ({
       async (league) => {
 
         const result =
-          await safeFootballRequest(
+          await safeBigBallsRequest(
             'standings',
             {
-              sport: 'football',
-              league
+              sport:
+                'football',
+
+              league,
+
+              ...(season
+                ? { season }
+                : {})
             }
           );
 
@@ -589,10 +716,13 @@ const getSportsUpdates = async ({
 
           league,
 
+          leagueName:
+            LEAGUE_NAMES[league] ||
+            league,
+
           ...result
 
         };
-
       }
     );
 
@@ -605,12 +735,17 @@ const getSportsUpdates = async ({
       async (league) => {
 
         const result =
-          await safeFootballRequest(
-            'players/stats',
+          await safeBigBallsRequest(
+            `leagues/${encodeURIComponent(
+              league
+            )}/top-scorers`,
             {
-              sport: 'football',
-              league,
-              sort: 'goals'
+              limit:
+                20,
+
+              ...(season
+                ? { season }
+                : {})
             }
           );
 
@@ -618,15 +753,18 @@ const getSportsUpdates = async ({
 
           league,
 
+          leagueName:
+            LEAGUE_NAMES[league] ||
+            league,
+
           ...result
 
         };
-
       }
     );
 
   // ---------------------------------------------------
-  // WAIT
+  // WAIT FOR REQUESTS
   // ---------------------------------------------------
 
   const [
@@ -653,36 +791,45 @@ const getSportsUpdates = async ({
 
   ]);
 
-  // ---------------------------------------------------
-  // LIVE DATA
-  // ---------------------------------------------------
+  // ===================================================
+  // EXTRACT LIVE
+  // ===================================================
 
   const liveData =
-    extractArray(
+    liveResult.data || {};
+
+  const liveMatches =
+    extractDataArray(
       liveResult
     );
 
-  // ---------------------------------------------------
-  // FIXTURES DATA
-  // ---------------------------------------------------
+  // ===================================================
+  // EXTRACT UPCOMING
+  // ===================================================
 
-  const fixturesData =
-    extractArray(
+  const upcomingData =
+    upcomingResult.data || {};
+
+  const upcomingMatches =
+    extractDataArray(
       upcomingResult
     );
 
-  // ---------------------------------------------------
-  // LEAGUES DATA
-  // ---------------------------------------------------
+  // ===================================================
+  // EXTRACT LEAGUES
+  // ===================================================
 
   const leaguesData =
-    extractArray(
+    leaguesResult.data || {};
+
+  const leagueList =
+    extractDataArray(
       leaguesResult
     );
 
-  // ---------------------------------------------------
-  // STANDINGS
-  // ---------------------------------------------------
+  // ===================================================
+  // NORMALIZE STANDINGS
+  // ===================================================
 
   const standings = [];
 
@@ -691,36 +838,40 @@ const getSportsUpdates = async ({
   standingsData.forEach(
     (item) => {
 
-      const data =
-        extractArray(
-          item
-        );
-
       if (
         item.success &&
-        data.length > 0
+        item.data
       ) {
 
-        standings.push({
+        const rows =
+          extractDataArray(
+            item
+          );
 
-          leagueId:
-            item.league,
+        if (
+          rows.length > 0
+        ) {
 
-          leagueName:
-            LEAGUES[
-              Object.keys(
-                LEAGUES
-              ).find(
-                key =>
-                  LEAGUES[key].code ===
-                  item.league
-              )
-            ]?.name ||
-            item.league,
+          standings.push({
 
-          data
+            leagueId:
+              item.league,
 
-        });
+            league:
+              item.league,
+
+            leagueName:
+              item.leagueName,
+
+            data:
+              rows,
+
+            meta:
+              item.data.meta ||
+              {}
+
+          });
+        }
 
       }
 
@@ -734,6 +885,9 @@ const getSportsUpdates = async ({
           league:
             item.league,
 
+          leagueName:
+            item.leagueName,
+
           error:
             item.error.message,
 
@@ -744,15 +898,14 @@ const getSportsUpdates = async ({
             item.error.status
 
         });
-
       }
 
     }
   );
 
-  // ---------------------------------------------------
-  // TOP SCORERS
-  // ---------------------------------------------------
+  // ===================================================
+  // NORMALIZE TOP SCORERS
+  // ===================================================
 
   const topScorers = [];
 
@@ -761,36 +914,40 @@ const getSportsUpdates = async ({
   topScorersData.forEach(
     (item) => {
 
-      const data =
-        extractArray(
-          item
-        );
-
       if (
         item.success &&
-        data.length > 0
+        item.data
       ) {
 
-        topScorers.push({
+        const rows =
+          extractDataArray(
+            item
+          );
 
-          leagueId:
-            item.league,
+        if (
+          rows.length > 0
+        ) {
 
-          leagueName:
-            LEAGUES[
-              Object.keys(
-                LEAGUES
-              ).find(
-                key =>
-                  LEAGUES[key].code ===
-                  item.league
-              )
-            ]?.name ||
-            item.league,
+          topScorers.push({
 
-          data
+            leagueId:
+              item.league,
 
-        });
+            league:
+              item.league,
+
+            leagueName:
+              item.leagueName,
+
+            data:
+              rows,
+
+            meta:
+              item.data.meta ||
+              {}
+
+          });
+        }
 
       }
 
@@ -804,6 +961,9 @@ const getSportsUpdates = async ({
           league:
             item.league,
 
+          leagueName:
+            item.leagueName,
+
           error:
             item.error.message,
 
@@ -814,26 +974,44 @@ const getSportsUpdates = async ({
             item.error.status
 
         });
-
       }
 
     }
   );
 
-  // ---------------------------------------------------
+  // ===================================================
+  // PROVIDER METADATA
+  // ===================================================
+
+  const liveMeta =
+    liveData.meta ||
+    {};
+
+  const upcomingMeta =
+    upcomingData.meta ||
+    {};
+
+  const leaguesMeta =
+    leaguesData.meta ||
+    {};
+
+  // ===================================================
   // ERRORS
-  // ---------------------------------------------------
+  // ===================================================
 
   const errors = {
 
     live:
-      liveResult.error || null,
+      liveResult.error ||
+      null,
 
     fixtures:
-      upcomingResult.error || null,
+      upcomingResult.error ||
+      null,
 
     leagues:
-      leaguesResult.error || null,
+      leaguesResult.error ||
+      null,
 
     standings:
       standingsErrors,
@@ -843,9 +1021,9 @@ const getSportsUpdates = async ({
 
   };
 
-  // ---------------------------------------------------
+  // ===================================================
   // PROVIDER STATUS
-  // ---------------------------------------------------
+  // ===================================================
 
   const hasProviderError =
     Boolean(
@@ -862,9 +1040,9 @@ const getSportsUpdates = async ({
 
     );
 
-  // ---------------------------------------------------
-  // RETURN
-  // ---------------------------------------------------
+  // ===================================================
+  // RETURN SINGLE SPORTS PACKAGE
+  // ===================================================
 
   return {
 
@@ -877,7 +1055,28 @@ const getSportsUpdates = async ({
     providerAvailable:
       !hasProviderError,
 
+    sport:
+      'football',
+
+    season:
+      season ||
+      null,
+
     selectedLeagues,
+
+    leagueNames:
+      selectedLeagues.reduce(
+        (acc, league) => {
+
+          acc[league] =
+            LEAGUE_NAMES[league] ||
+            league;
+
+          return acc;
+
+        },
+        {}
+      ),
 
     updatedAt:
       new Date().toISOString(),
@@ -885,30 +1084,39 @@ const getSportsUpdates = async ({
     live: {
 
       results:
-        liveData.length,
+        liveMatches.length,
 
       data:
-        liveData
+        liveMatches,
+
+      meta:
+        liveMeta
 
     },
 
     fixtures: {
 
       results:
-        fixturesData.length,
+        upcomingMatches.length,
 
       data:
-        fixturesData
+        upcomingMatches,
+
+      meta:
+        upcomingMeta
 
     },
 
     leagues: {
 
       results:
-        leaguesData.length,
+        leagueList.length,
 
       data:
-        leaguesData
+        leagueList,
+
+      meta:
+        leaguesMeta
 
     },
 
@@ -919,7 +1127,6 @@ const getSportsUpdates = async ({
     errors
 
   };
-
 };
 
 // =====================================================
@@ -928,9 +1135,10 @@ const getSportsUpdates = async ({
 
 module.exports = {
 
-  footballRequest,
+  bigBallsRequest,
 
-  safeFootballRequest,
+  footballRequest:
+    bigBallsRequest,
 
   getFixtures,
 
