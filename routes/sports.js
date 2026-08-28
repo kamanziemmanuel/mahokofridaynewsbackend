@@ -3,33 +3,15 @@
 // MFN SPORTS ROUTES
 // BIG BALLS SPORTS DATA
 // =====================================================
-//
-// Base route:
-// /api/sports
-//
-// Provider:
-// Big Balls Sports Data
-//
-// Frontend-compatible endpoints:
-// /api/sports
-// /api/sports/fixtures
-// /api/sports/live
-// /api/sports/upcoming
-// /api/sports/leagues
-// /api/sports/standings
-// /api/sports/top-scorers
-// /api/sports/updates
-//
-// =====================================================
 
 const express = require('express');
 
 const router = express.Router();
 
 const {
-  getFixtures,
-  getLiveFixtures,
-  getUpcomingFixtures,
+  getMatches,
+  getLiveMatches,
+  getUpcomingMatches,
   getLeagues,
   getStandings,
   getTopScorers,
@@ -37,43 +19,27 @@ const {
 } = require('../services/footballService');
 
 // =====================================================
-// HELPER
+// DEFAULT LEAGUES
+// =====================================================
+//
+// Big Balls league codes
+//
+// epl = Premier League
+// laliga = La Liga
+// seriea = Serie A
+// bundesliga = Bundesliga
+// ligue1 = Ligue 1
+//
+// Keep these as the five main leagues.
 // =====================================================
 
-const sendProviderError = (
-  res,
-  error,
-  fallbackMessage
-) => {
-
-  console.error(
-    'MFN SPORTS ERROR:',
-    error
-  );
-
-  return res.status(
-    error?.status || 500
-  ).json({
-
-    success: false,
-
-    provider:
-      'Big Balls Sports Data',
-
-    error:
-      error?.message ||
-      fallbackMessage,
-
-    code:
-      error?.code ||
-      null,
-
-    details:
-      error?.details ||
-      undefined
-
-  });
-};
+const DEFAULT_LEAGUES = [
+  'epl',
+  'laliga',
+  'seriea',
+  'bundesliga',
+  'ligue1'
+];
 
 // =====================================================
 // SPORTS HOME / STATUS
@@ -86,16 +52,18 @@ router.get('/', async (req, res) => {
 
     success: true,
 
-    service:
-      'MFN Sports API',
+    service: 'MFN Sports API',
 
-    provider:
-      'Big Balls Sports Data',
+    provider: 'Big Balls Sports Data',
 
-    sport:
-      'football',
+    sport: 'football',
+
+    defaultLeagues: DEFAULT_LEAGUES,
 
     endpoints: {
+
+      updates:
+        '/api/sports/updates',
 
       fixtures:
         '/api/sports/fixtures',
@@ -110,13 +78,10 @@ router.get('/', async (req, res) => {
         '/api/sports/leagues',
 
       standings:
-        '/api/sports/standings',
+        '/api/sports/standings?league=epl',
 
       topScorers:
-        '/api/sports/top-scorers',
-
-      updates:
-        '/api/sports/updates'
+        '/api/sports/top-scorers?league=epl'
 
     }
 
@@ -125,492 +90,544 @@ router.get('/', async (req, res) => {
 });
 
 // =====================================================
-// FIXTURES
-// GET /api/sports/fixtures
+// SPORTS UPDATES PACKAGE
+//
+// GET /api/sports/updates
+//
+// Optional:
+// /api/sports/updates?leagues=epl,laliga,seriea
+//
+// This is the main endpoint for frontend.
 // =====================================================
+
+router.get('/updates', async (req, res) => {
+
+  try {
+
+    let leagues = DEFAULT_LEAGUES;
+
+    if (req.query.leagues) {
+
+      leagues = String(req.query.leagues)
+        .split(',')
+        .map(item => item.trim().toLowerCase())
+        .filter(Boolean);
+
+    }
+
+    const data = await getSportsUpdates({
+      leagues
+    });
+
+    return res.status(200).json(data);
+
+  } catch (error) {
+
+    console.error(
+      'SPORTS UPDATES ERROR:',
+      error
+    );
+
+    return res.status(
+      error.status || 500
+    ).json({
+
+      success: false,
+
+      provider:
+        'Big Balls Sports Data',
+
+      error:
+        error.message ||
+        'Unable to retrieve sports updates.',
+
+      details:
+        error.details || undefined
+
+    });
+
+  }
+
+});
+
+// =====================================================
+// FIXTURES
+//
+// GET /api/sports/fixtures
 //
 // Examples:
 //
 // /api/sports/fixtures
-//
 // /api/sports/fixtures?league=epl
-//
+// /api/sports/fixtures?league=laliga
 // /api/sports/fixtures?status=live
-//
-// /api/sports/fixtures?status=upcoming
-//
-// /api/sports/fixtures?league=epl&status=upcoming
-//
 // =====================================================
 
-router.get(
-  '/fixtures',
-  async (req, res) => {
+router.get('/fixtures', async (req, res) => {
 
-    try {
+  try {
 
-      const {
-        league,
-        season,
-        status,
-        team,
-        date,
-        from,
-        to,
-        limit
-      } = req.query;
+    const {
+      league,
+      status,
+      date,
+      limit,
+      page
+    } = req.query;
 
-      const params = {};
+    const params = {
 
-      if (league) {
-        params.league =
-          league;
-      }
+      sport: 'football',
 
-      if (season) {
-        params.season =
-          season;
-      }
+      limit:
+        Number(limit) || 50
 
-      if (status) {
-        params.status =
-          status;
-      }
+    };
 
-      if (team) {
-        params.team =
-          team;
-      }
-
-      if (date) {
-        params.date =
-          date;
-      }
-
-      if (from) {
-        params.from =
-          from;
-      }
-
-      if (to) {
-        params.to =
-          to;
-      }
-
-      if (limit) {
-        params.limit =
-          limit;
-      }
-
-      const data =
-        await getFixtures(
-          params
-        );
-
-      return res.status(200).json({
-
-        success: true,
-
-        provider:
-          'Big Balls Sports Data',
-
-        sport:
-          'football',
-
-        results:
-          Array.isArray(data?.data)
-            ? data.data.length
-            : Array.isArray(data)
-              ? data.length
-              : 0,
-
-        response:
-          Array.isArray(data?.data)
-            ? data.data
-            : Array.isArray(data)
-              ? data
-              : [],
-
-        meta:
-          data?.meta ||
-          {},
-
-        errors:
-          data?.errors ||
-          []
-
-      });
-
-    } catch (error) {
-
-      return sendProviderError(
-        res,
-        error,
-        'Unable to retrieve football fixtures.'
-      );
-
+    if (league) {
+      params.league =
+        String(league).trim().toLowerCase();
     }
 
+    if (status) {
+      params.status =
+        String(status).trim().toLowerCase();
+    }
+
+    if (date) {
+      params.date = date;
+    }
+
+    if (page) {
+      params.page =
+        Number(page) || 1;
+    }
+
+    const data =
+      await getMatches(params);
+
+    return res.status(200).json({
+
+      success: true,
+
+      provider:
+        'Big Balls Sports Data',
+
+      sport:
+        'football',
+
+      results:
+        Array.isArray(data.data)
+          ? data.data.length
+          : 0,
+
+      response:
+        Array.isArray(data.data)
+          ? data.data
+          : [],
+
+      meta:
+        data.meta || null,
+
+      error:
+        data.error || null
+
+    });
+
+  } catch (error) {
+
+    console.error(
+      'SPORTS FIXTURES ERROR:',
+      error
+    );
+
+    return res.status(
+      error.status || 500
+    ).json({
+
+      success: false,
+
+      provider:
+        'Big Balls Sports Data',
+
+      error:
+        error.message ||
+        'Unable to retrieve football fixtures.',
+
+      details:
+        error.details || undefined
+
+    });
+
   }
-);
+
+});
 
 // =====================================================
 // LIVE MATCHES
+//
 // GET /api/sports/live
+//
+// Optional:
+// /api/sports/live?league=epl
 // =====================================================
 
-router.get(
-  '/live',
-  async (req, res) => {
+router.get('/live', async (req, res) => {
 
-    try {
+  try {
 
-      const data =
-        await getLiveFixtures();
+    const league =
+      req.query.league
+        ? String(req.query.league)
+            .trim()
+            .toLowerCase()
+        : null;
 
-      const matches =
-        Array.isArray(data?.data)
-          ? data.data
-          : Array.isArray(data)
-            ? data
-            : [];
-
-      return res.status(200).json({
-
-        success: true,
-
-        provider:
-          'Big Balls Sports Data',
-
-        sport:
-          'football',
-
-        results:
-          matches.length,
-
-        response:
-          matches,
-
-        meta:
-          data?.meta ||
-          {},
-
-        errors:
-          data?.errors ||
-          []
-
-      });
-
-    } catch (error) {
-
-      return sendProviderError(
-        res,
-        error,
-        'Unable to retrieve live football matches.'
+    const data =
+      await getLiveMatches(
+        league
       );
 
-    }
+    return res.status(200).json({
+
+      success: true,
+
+      provider:
+        'Big Balls Sports Data',
+
+      sport:
+        'football',
+
+      results:
+        Array.isArray(data.data)
+          ? data.data.length
+          : 0,
+
+      response:
+        Array.isArray(data.data)
+          ? data.data
+          : [],
+
+      meta:
+        data.meta || null,
+
+      error:
+        data.error || null
+
+    });
+
+  } catch (error) {
+
+    console.error(
+      'SPORTS LIVE ERROR:',
+      error
+    );
+
+    return res.status(
+      error.status || 500
+    ).json({
+
+      success: false,
+
+      provider:
+        'Big Balls Sports Data',
+
+      error:
+        error.message ||
+        'Unable to retrieve live matches.',
+
+      details:
+        error.details || undefined
+
+    });
 
   }
-);
+
+});
 
 // =====================================================
 // UPCOMING MATCHES
+//
 // GET /api/sports/upcoming
-// =====================================================
 //
 // Examples:
 //
 // /api/sports/upcoming
-//
-// /api/sports/upcoming?next=20
-//
 // /api/sports/upcoming?league=epl
-//
-// /api/sports/upcoming?league=epl&season=2026
-//
 // =====================================================
 
-router.get(
-  '/upcoming',
-  async (req, res) => {
+router.get('/upcoming', async (req, res) => {
 
-    try {
+  try {
 
-      const {
+    const league =
+      req.query.league
+        ? String(req.query.league)
+            .trim()
+            .toLowerCase()
+        : null;
+
+    const limit =
+      Number(req.query.limit) || 20;
+
+    const data =
+      await getUpcomingMatches(
         league,
-        season,
-        next
-      } = req.query;
-
-      const limit =
-        Number(next) > 0
-          ? Number(next)
-          : 20;
-
-      const data =
-        await getUpcomingFixtures(
-          league,
-          season,
-          limit
-        );
-
-      const matches =
-        Array.isArray(data?.data)
-          ? data.data
-          : Array.isArray(data)
-            ? data
-            : [];
-
-      return res.status(200).json({
-
-        success: true,
-
-        provider:
-          'Big Balls Sports Data',
-
-        sport:
-          'football',
-
-        results:
-          matches.length,
-
-        response:
-          matches,
-
-        meta:
-          data?.meta ||
-          {},
-
-        errors:
-          data?.errors ||
-          []
-
-      });
-
-    } catch (error) {
-
-      return sendProviderError(
-        res,
-        error,
-        'Unable to retrieve upcoming football matches.'
+        limit
       );
 
-    }
+    return res.status(200).json({
+
+      success: true,
+
+      provider:
+        'Big Balls Sports Data',
+
+      sport:
+        'football',
+
+      results:
+        Array.isArray(data.data)
+          ? data.data.length
+          : 0,
+
+      response:
+        Array.isArray(data.data)
+          ? data.data
+          : [],
+
+      meta:
+        data.meta || null,
+
+      error:
+        data.error || null
+
+    });
+
+  } catch (error) {
+
+    console.error(
+      'SPORTS UPCOMING ERROR:',
+      error
+    );
+
+    return res.status(
+      error.status || 500
+    ).json({
+
+      success: false,
+
+      provider:
+        'Big Balls Sports Data',
+
+      error:
+        error.message ||
+        'Unable to retrieve upcoming matches.',
+
+      details:
+        error.details || undefined
+
+    });
 
   }
-);
+
+});
 
 // =====================================================
 // LEAGUES
+//
 // GET /api/sports/leagues
-// =====================================================
 //
-// Examples:
-//
+// Optional:
 // /api/sports/leagues
-//
-// /api/sports/leagues?search=Premier
-//
-// /api/sports/leagues?country=England
-//
+// /api/sports/leagues?league=epl
 // =====================================================
 
-router.get(
-  '/leagues',
-  async (req, res) => {
+router.get('/leagues', async (req, res) => {
 
-    try {
+  try {
 
-      const {
-        search,
-        country,
-        season
-      } = req.query;
+    const data =
+      await getLeagues();
 
-      const params = {};
+    return res.status(200).json({
 
-      if (search) {
-        params.search =
-          search;
-      }
+      success: true,
 
-      if (country) {
-        params.country =
-          country;
-      }
+      provider:
+        'Big Balls Sports Data',
 
-      if (season) {
-        params.season =
-          season;
-      }
+      sport:
+        'football',
 
-      const data =
-        await getLeagues(
-          params
-        );
+      results:
+        Array.isArray(data.data)
+          ? data.data.length
+          : 0,
 
-      const leagues =
-        Array.isArray(data?.data)
+      response:
+        Array.isArray(data.data)
           ? data.data
-          : Array.isArray(data)
-            ? data
-            : [];
+          : [],
 
-      return res.status(200).json({
+      meta:
+        data.meta || null,
 
-        success: true,
+      error:
+        data.error || null
 
-        provider:
-          'Big Balls Sports Data',
+    });
 
-        sport:
-          'football',
+  } catch (error) {
 
-        results:
-          leagues.length,
+    console.error(
+      'SPORTS LEAGUES ERROR:',
+      error
+    );
 
-        response:
-          leagues,
+    return res.status(
+      error.status || 500
+    ).json({
 
-        meta:
-          data?.meta ||
-          {},
+      success: false,
 
-        errors:
-          data?.errors ||
-          []
+      provider:
+        'Big Balls Sports Data',
 
-      });
+      error:
+        error.message ||
+        'Unable to retrieve football leagues.',
 
-    } catch (error) {
+      details:
+        error.details || undefined
 
-      return sendProviderError(
-        res,
-        error,
-        'Unable to retrieve football leagues.'
-      );
-
-    }
+    });
 
   }
-);
+
+});
 
 // =====================================================
 // STANDINGS
-// GET /api/sports/standings
-// =====================================================
 //
-// Required:
+// GET /api/sports/standings?league=epl
 //
-// league
+// IMPORTANT:
+// league is REQUIRED.
 //
 // Examples:
 //
 // /api/sports/standings?league=epl
-//
-// /api/sports/standings?league=epl&season=2026
-//
+// /api/sports/standings?league=laliga
+// /api/sports/standings?league=seriea
+// /api/sports/standings?league=bundesliga
+// /api/sports/standings?league=ligue1
 // =====================================================
 
-router.get(
-  '/standings',
-  async (req, res) => {
+router.get('/standings', async (req, res) => {
 
-    try {
+  try {
 
-      const {
-        league,
-        season
-      } = req.query;
+    const league =
+      req.query.league
+        ? String(req.query.league)
+            .trim()
+            .toLowerCase()
+        : null;
 
-      if (!league) {
+    if (!league) {
 
-        return res.status(400).json({
+      return res.status(400).json({
 
-          success: false,
-
-          provider:
-            'Big Balls Sports Data',
-
-          error:
-            'league is required.'
-
-        });
-
-      }
-
-      const data =
-        await getStandings(
-          league,
-          season
-        );
-
-      const standings =
-        Array.isArray(data?.data)
-          ? data.data
-          : Array.isArray(data)
-            ? data
-            : [];
-
-      return res.status(200).json({
-
-        success: true,
+        success: false,
 
         provider:
           'Big Balls Sports Data',
 
-        sport:
-          'football',
+        error:
+          'league is required.',
 
-        league,
+        example:
+          '/api/sports/standings?league=epl',
 
-        results:
-          standings.length,
-
-        response:
-          standings,
-
-        meta:
-          data?.meta ||
-          {},
-
-        errors:
-          data?.errors ||
-          []
+        supportedLeagues:
+          DEFAULT_LEAGUES
 
       });
 
-    } catch (error) {
-
-      return sendProviderError(
-        res,
-        error,
-        'Unable to retrieve football standings.'
-      );
-
     }
 
+    const data =
+      await getStandings(
+        league
+      );
+
+    return res.status(200).json({
+
+      success: true,
+
+      provider:
+        'Big Balls Sports Data',
+
+      sport:
+        'football',
+
+      league,
+
+      results:
+        Array.isArray(data.data)
+          ? data.data.length
+          : 0,
+
+      response:
+        Array.isArray(data.data)
+          ? data.data
+          : [],
+
+      meta:
+        data.meta || null,
+
+      error:
+        data.error || null
+
+    });
+
+  } catch (error) {
+
+    console.error(
+      'SPORTS STANDINGS ERROR:',
+      error
+    );
+
+    return res.status(
+      error.status || 500
+    ).json({
+
+      success: false,
+
+      provider:
+        'Big Balls Sports Data',
+
+      error:
+        error.message ||
+        'Unable to retrieve standings.',
+
+      details:
+        error.details || undefined
+
+    });
+
   }
-);
+
+});
 
 // =====================================================
 // TOP SCORERS
-// GET /api/sports/top-scorers
-// =====================================================
 //
-// Required:
+// GET /api/sports/top-scorers?league=epl
 //
-// league
-//
-// Examples:
-//
-// /api/sports/top-scorers?league=epl
-//
-// /api/sports/top-scorers?league=epl&season=2026
-//
-// /api/sports/top-scorers?league=laliga
-//
+// IMPORTANT:
+// league is REQUIRED.
 // =====================================================
 
 router.get(
@@ -619,11 +636,12 @@ router.get(
 
     try {
 
-      const {
-        league,
-        season,
-        limit
-      } = req.query;
+      const league =
+        req.query.league
+          ? String(req.query.league)
+              .trim()
+              .toLowerCase()
+          : null;
 
       if (!league) {
 
@@ -635,30 +653,22 @@ router.get(
             'Big Balls Sports Data',
 
           error:
-            'league is required.'
+            'league is required.',
+
+          example:
+            '/api/sports/top-scorers?league=epl',
+
+          supportedLeagues:
+            DEFAULT_LEAGUES
 
         });
 
       }
 
-      const scorerLimit =
-        Number(limit) > 0
-          ? Number(limit)
-          : 20;
-
       const data =
         await getTopScorers(
-          league,
-          season,
-          scorerLimit
+          league
         );
-
-      const scorers =
-        Array.isArray(data?.data)
-          ? data.data
-          : Array.isArray(data)
-            ? data
-            : [];
 
       return res.status(200).json({
 
@@ -673,28 +683,47 @@ router.get(
         league,
 
         results:
-          scorers.length,
+          Array.isArray(data.data)
+            ? data.data.length
+            : 0,
 
         response:
-          scorers,
+          Array.isArray(data.data)
+            ? data.data
+            : [],
 
         meta:
-          data?.meta ||
-          {},
+          data.meta || null,
 
-        errors:
-          data?.errors ||
-          []
+        error:
+          data.error || null
 
       });
 
     } catch (error) {
 
-      return sendProviderError(
-        res,
-        error,
-        'Unable to retrieve football top scorers.'
+      console.error(
+        'SPORTS TOP SCORERS ERROR:',
+        error
       );
+
+      return res.status(
+        error.status || 500
+      ).json({
+
+        success: false,
+
+        provider:
+          'Big Balls Sports Data',
+
+        error:
+          error.message ||
+          'Unable to retrieve top scorers.',
+
+        details:
+          error.details || undefined
+
+      });
 
     }
 
@@ -702,142 +731,7 @@ router.get(
 );
 
 // =====================================================
-// SPORTS UPDATES PACKAGE
-// GET /api/sports/updates
-// =====================================================
-//
-// THIS IS THE MAIN ENDPOINT FOR THE FRONTEND.
-//
-// Returns:
-//
-// live
-// fixtures
-// leagues
-// standings
-// topScorers
-// errors
-//
-// Examples:
-//
-// /api/sports/updates
-//
-// /api/sports/updates?season=2026
-//
-// /api/sports/updates?leagues=epl,laliga,serie-a
-//
-// /api/sports/updates?season=2026&leagues=epl,laliga
-//
-// =====================================================
-
-router.get(
-  '/updates',
-  async (req, res) => {
-
-    try {
-
-      // -----------------------------------------------
-      // Season
-      // -----------------------------------------------
-
-      const season =
-        req.query.season
-          ? Number(
-              req.query.season
-            )
-          : undefined;
-
-      // -----------------------------------------------
-      // Validate season
-      // -----------------------------------------------
-
-      if (
-        season !== undefined &&
-        (
-          !Number.isInteger(
-            season
-          ) ||
-          season < 1900 ||
-          season > 2200
-        )
-      ) {
-
-        return res.status(400).json({
-
-          success: false,
-
-          provider:
-            'Big Balls Sports Data',
-
-          error:
-            'Invalid season. Use a valid year such as 2026.'
-
-        });
-
-      }
-
-      // -----------------------------------------------
-      // Parse leagues
-      // -----------------------------------------------
-
-      let leagues = [];
-
-      if (req.query.leagues) {
-
-        leagues =
-          String(
-            req.query.leagues
-          )
-            .split(',')
-
-            .map(
-              (league) =>
-                league
-                  .trim()
-                  .toLowerCase()
-            )
-
-            .filter(
-              Boolean
-            );
-
-      }
-
-      // -----------------------------------------------
-      // Get complete sports package
-      // -----------------------------------------------
-
-      const data =
-        await getSportsUpdates({
-
-          leagues,
-
-          season
-
-        });
-
-      // -----------------------------------------------
-      // Return package
-      // -----------------------------------------------
-
-      return res.status(200).json(
-        data
-      );
-
-    } catch (error) {
-
-      return sendProviderError(
-        res,
-        error,
-        'Unable to retrieve sports updates.'
-      );
-
-    }
-
-  }
-);
-
-// =====================================================
-// EXPORT ROUTER
+// EXPORT
 // =====================================================
 
 module.exports = router;
