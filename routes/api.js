@@ -231,7 +231,211 @@ router.put(
   }
 );
 
+// ================= SPORTS =================
 
+const SPORTS_API_BASE =
+  'https://v3.football.api-sports.io';
+
+const getSportsApiKey = () =>
+  process.env.API_FOOTBALL_KEY ||
+  process.env.APISPORTS_KEY ||
+  process.env.FOOTBALL_API_KEY;
+
+
+// FIXTURES
+router.get('/sports/fixtures', async (req, res) => {
+  try {
+    const {
+      league,
+      season,
+      date,
+      from,
+      to
+    } = req.query;
+
+    if (!league || !season) {
+      return res.status(400).json({
+        success: false,
+        error: 'league and season are required'
+      });
+    }
+
+    const apiKey = getSportsApiKey();
+
+    if (!apiKey) {
+      return res.status(500).json({
+        success: false,
+        error: 'Football API key is not configured'
+      });
+    }
+
+    const params = new URLSearchParams({
+      league: String(league),
+      season: String(season)
+    });
+
+    if (from && to) {
+      params.set('from', String(from));
+      params.set('to', String(to));
+    } else if (date) {
+      params.set('date', String(date));
+    }
+
+    const response = await fetch(
+      `${SPORTS_API_BASE}/fixtures?${params.toString()}`,
+      {
+        headers: {
+          'x-apisports-key': apiKey
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        success: false,
+        error: data?.message || 'Football API error',
+        response: data
+      });
+    }
+
+    res.json(data);
+
+  } catch (err) {
+    console.error('SPORT FIXTURES ERROR:', err);
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to load sports fixtures',
+      details: err.message
+    });
+  }
+});
+
+
+// STANDINGS
+router.get('/sports/standings', async (req, res) => {
+  try {
+    const {
+      league,
+      season
+    } = req.query;
+
+    if (!league || !season) {
+      return res.status(400).json({
+        success: false,
+        error: 'league and season are required'
+      });
+    }
+
+    const apiKey = getSportsApiKey();
+
+    if (!apiKey) {
+      return res.status(500).json({
+        success: false,
+        error: 'Football API key is not configured'
+      });
+    }
+
+    const params = new URLSearchParams({
+      league: String(league),
+      season: String(season)
+    });
+
+    const response = await fetch(
+      `${SPORTS_API_BASE}/standings?${params.toString()}`,
+      {
+        headers: {
+          'x-apisports-key': apiKey
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        success: false,
+        error: data?.message || 'Football API error',
+        response: data
+      });
+    }
+
+    res.json(data);
+
+  } catch (err) {
+    console.error('SPORT STANDINGS ERROR:', err);
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to load standings',
+      details: err.message
+    });
+  }
+});
+
+
+// TOP SCORERS
+router.get('/sports/topscorers', async (req, res) => {
+  try {
+    const {
+      league,
+      season
+    } = req.query;
+
+    if (!league || !season) {
+      return res.status(400).json({
+        success: false,
+        error: 'league and season are required'
+      });
+    }
+
+    const apiKey = getSportsApiKey();
+
+    if (!apiKey) {
+      return res.status(500).json({
+        success: false,
+        error: 'Football API key is not configured'
+      });
+    }
+
+    const params = new URLSearchParams({
+      league: String(league),
+      season: String(season)
+    });
+
+    const response = await fetch(
+      `${SPORTS_API_BASE}/players/topscorers?${params.toString()}`,
+      {
+        headers: {
+          'x-apisports-key': apiKey
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        success: false,
+        error: data?.message || 'Football API error',
+        response: data
+      });
+    }
+
+    res.json(data);
+
+  } catch (err) {
+    console.error('SPORT TOP SCORERS ERROR:', err);
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to load top scorers',
+      details: err.message
+    });
+  }
+});
 router.get('/authors/:id/stories', async (req, res) => {
 
   try {
