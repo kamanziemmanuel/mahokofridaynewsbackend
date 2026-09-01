@@ -7,7 +7,7 @@ const router = express.Router();
 router.get("/sitemap.xml", async (req, res) => {
   try {
     const sitemap = new SitemapStream({
-      hostname: "https://www.mahokofridaynews.com",
+      hostname: "https://mahokofridaynews.com",
     });
 
     // =========================================================
