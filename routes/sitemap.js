@@ -51,7 +51,7 @@ router.get("/sitemap.xml", async (req, res) => {
     });
 
     // =========================================================
-    // 2. CATEGORY PAGES
+    // 2. PUBLIC CATEGORY PAGES
     // =========================================================
 
     const categories = [
@@ -72,52 +72,53 @@ router.get("/sitemap.xml", async (req, res) => {
     });
 
     // =========================================================
-    // 3. GET ALL PUBLISHED ARTICLES FROM MONGODB
+    // 3. GET ALL PUBLISHED STORIES FROM MONGODB
     // =========================================================
 
     const stories = await Story.find({
       status: "published",
     })
-      .select("_id slug createdAt updatedAt")
+      .select("_id createdAt updatedAt")
       .sort({ createdAt: -1 })
       .lean();
 
     // =========================================================
-    // 4. ADD EVERY ARTICLE TO THE SITEMAP
+    // 4. ADD EVERY PUBLISHED STORY
     // =========================================================
 
     stories.forEach((story) => {
-
-      // Use slug if your article has one.
-      // Otherwise use MongoDB ID.
-      const articleIdentifier = story.slug || story._id.toString();
+      if (!story._id) return;
 
       sitemap.write({
-        url: `/story/${articleIdentifier}`,
+        url: `/story/${story._id.toString()}`,
         lastmod: story.updatedAt || story.createdAt,
         changefreq: "weekly",
         priority: 0.8,
       });
-
     });
 
-    // Finish sitemap
+    // =========================================================
+    // 5. FINISH SITEMAP
+    // =========================================================
+
     sitemap.end();
 
-    // Convert sitemap stream to XML
     const sitemapXML = await streamToPromise(sitemap);
 
-    // Tell browser/Google this is XML
-    res.set("Content-Type", "application/xml");
+    // =========================================================
+    // 6. SEND XML TO GOOGLE
+    // =========================================================
 
-    res.send(sitemapXML.toString());
+    res.set("Content-Type", "application/xml; charset=utf-8");
+
+    return res.send(sitemapXML.toString());
 
   } catch (error) {
-
     console.error("Sitemap generation error:", error);
 
-    res.status(500).send("Could not generate sitemap");
-
+    return res.status(500).send(
+      "Could not generate sitemap"
+    );
   }
 });
 
