@@ -21,9 +21,33 @@ router.get("/sitemap.xml", async (req, res) => {
     });
 
     sitemap.write({
+      url: "/archive",
+      changefreq: "weekly",
+      priority: 0.8,
+    });
+
+    sitemap.write({
+      url: "/e-paper",
+      changefreq: "weekly",
+      priority: 0.8,
+    });
+
+    sitemap.write({
       url: "/about",
       changefreq: "monthly",
       priority: 0.7,
+    });
+
+    sitemap.write({
+      url: "/newsletter",
+      changefreq: "monthly",
+      priority: 0.6,
+    });
+
+    sitemap.write({
+      url: "/terms",
+      changefreq: "yearly",
+      priority: 0.3,
     });
 
     sitemap.write({
@@ -51,28 +75,93 @@ router.get("/sitemap.xml", async (req, res) => {
     });
 
     // =========================================================
-    // 2. PUBLIC CATEGORY PAGES
+    // 2. MAIN CATEGORY PAGES
     // =========================================================
 
-    const categories = [
-      "business",
-      "sport",
-      "technology",
-      "health",
-      "culture",
-      "environment",
-    ];
+    sitemap.write({
+      url: "/category/business",
+      changefreq: "daily",
+      priority: 0.8,
+    });
 
-    categories.forEach((category) => {
-      sitemap.write({
-        url: `/category/${category}`,
-        changefreq: "daily",
-        priority: 0.8,
-      });
+    sitemap.write({
+      url: "/category/sport",
+      changefreq: "daily",
+      priority: 0.8,
+    });
+
+    sitemap.write({
+      url: "/category/technology",
+      changefreq: "daily",
+      priority: 0.8,
+    });
+
+    sitemap.write({
+      url: "/category/health",
+      changefreq: "daily",
+      priority: 0.8,
+    });
+
+    sitemap.write({
+      url: "/category/culture",
+      changefreq: "daily",
+      priority: 0.8,
+    });
+
+    sitemap.write({
+      url: "/category/entertainment",
+      changefreq: "daily",
+      priority: 0.8,
+    });
+
+    sitemap.write({
+      url: "/category/education",
+      changefreq: "daily",
+      priority: 0.8,
+    });
+
+    sitemap.write({
+      url: "/category/religion",
+      changefreq: "daily",
+      priority: 0.8,
     });
 
     // =========================================================
-    // 3. GET ALL PUBLISHED STORIES FROM MONGODB
+    // 3. MORE DROPDOWN CATEGORY PAGES
+    // =========================================================
+
+    sitemap.write({
+      url: "/category/le-phare",
+      changefreq: "daily",
+      priority: 0.8,
+    });
+
+    sitemap.write({
+      url: "/category/environment",
+      changefreq: "daily",
+      priority: 0.8,
+    });
+
+    sitemap.write({
+      url: "/category/music",
+      changefreq: "daily",
+      priority: 0.8,
+    });
+
+    sitemap.write({
+      url: "/category/transport",
+      changefreq: "daily",
+      priority: 0.8,
+    });
+
+    sitemap.write({
+      url: "/category/joblinks",
+      changefreq: "daily",
+      priority: 0.8,
+    });
+
+    // =========================================================
+    // 4. GET ALL PUBLISHED STORIES FROM MONGODB
     // =========================================================
 
     const stories = await Story.find({
@@ -83,7 +172,7 @@ router.get("/sitemap.xml", async (req, res) => {
       .lean();
 
     // =========================================================
-    // 4. ADD EVERY PUBLISHED STORY
+    // 5. ADD EVERY PUBLISHED STORY
     // =========================================================
 
     stories.forEach((story) => {
@@ -98,7 +187,7 @@ router.get("/sitemap.xml", async (req, res) => {
     });
 
     // =========================================================
-    // 5. FINISH SITEMAP
+    // 6. FINISH SITEMAP
     // =========================================================
 
     sitemap.end();
@@ -106,7 +195,7 @@ router.get("/sitemap.xml", async (req, res) => {
     const sitemapXML = await streamToPromise(sitemap);
 
     // =========================================================
-    // 6. SEND XML TO GOOGLE
+    // 7. SEND XML
     // =========================================================
 
     res.set("Content-Type", "application/xml; charset=utf-8");
