@@ -6,7 +6,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
-
+const sitemapRoutes = require("./routes/sitemap");
 const connectDB = require('./db');
 
 const app = express();
@@ -185,7 +185,7 @@ app.use(
   '/api/auth/login',
   loginLimiter
 );
-
+app.use("/", sitemapRoutes);
 // =====================================================
 // GENERAL API RATE LIMIT
 // =====================================================
